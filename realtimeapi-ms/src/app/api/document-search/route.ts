@@ -54,21 +54,46 @@ export async function POST(request: NextRequest) {
             message: `📄 Searching documents for: ${query}...` 
           })}\n\n`);
 
-          // Use OpenAI Responses API for document search with streaming
-          const response = await fetch('http://localhost:5001/api/openai-responses', {
+          // Use OpenAI Responses API directly for document search with streaming
+          const openaiApiKey = process.env.OPENAI_API_KEY;
+          if (!openaiApiKey) {
+            throw new Error('OpenAI API key not configured');
+          }
+
+          const response = await fetch('https://api.openai.com/v1/beta/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Authorization': `Bearer ${openaiApiKey}`,
+              'OpenAI-Beta': 'assistants=v2'
             },
-            body: JSON.stringify({ 
-              prompt: `Search documents for: ${query}. Provide a comprehensive answer based on the document content.`,
-              vectorStoreId: vectorStoreId,
-              stream: true
+            body: JSON.stringify({
+              model: 'gpt-4o',
+              messages: [
+                {
+                  role: 'user',
+                  content: query
+                }
+              ],
+              tools: [
+                {
+                  type: 'file_search'
+                }
+              ],
+              tool_resources: {
+                file_search: {
+                  vector_store_ids: [vectorStoreId]
+                }
+              },
+              stream: true,
+              temperature: 0.3,
+              max_tokens: 2000
             }),
           });
 
           if (!response.ok) {
-            throw new Error('OpenAI Responses API failed');
+            const errorText = await response.text();
+            throw new Error(`OpenAI API failed: ${response.status} - ${errorText}`);
           }
 
           // Handle streaming response
@@ -80,6 +105,7 @@ export async function POST(request: NextRequest) {
           const decoder = new TextDecoder();
           let buffer = '';
           let hasContent = false;
+          let fullContent = '';
 
           while (true && !isClosed) {
             const { done, value } = await reader.read();
@@ -91,87 +117,65 @@ export async function POST(request: NextRequest) {
 
             for (const line of lines) {
               if (line.startsWith('data: ') && !isClosed) {
-                const data = line.slice(6);
+                const data = line.slice(6).trim();
                 if (data === '[DONE]') {
                   safeEnqueue(`data: ${JSON.stringify({ 
                     type: 'complete', 
-                    message: '✅ Document search completed!' 
+                    message: '✅ Document search completed!',
+                    fullContent: fullContent
                   })}\n\n`);
                   safeClose();
                   return;
                 }
 
+                if (data === '') continue;
+
                 try {
                   const parsed = JSON.parse(data);
                   
-                  // Handle Responses API streaming format - same as regular text chat
-                  if (parsed.output && Array.isArray(parsed.output)) {
-                    for (const output of parsed.output) {
-                      // Handle message content updates
-                      if (output.type === 'message' && output.content) {
-                        for (const content of output.content) {
-                          if (content.type === 'output_text' && content.text) {
-                            hasContent = true;
-                            safeEnqueue(`data: ${JSON.stringify({
-                              type: 'content',
-                              text: content.text
-                            })}\n\n`);
-                          }
-                        }
-                      }
-                      // Handle file search status updates
-                      else if (output.type === 'file_search_call') {
-                        if (output.status === 'in_progress') {
-                          safeEnqueue(`data: ${JSON.stringify({ 
-                            type: 'status', 
-                            message: '🔍 Searching documents...' 
-                          })}\n\n`);
-                        } else if (output.status === 'completed') {
-                          console.log('✅ File search completed');
-                        }
-                      }
-                    }
-                  }
-                  
-                  // Handle alternative delta format (fallback)
-                  else if (parsed.type === 'response.output_text.delta' && parsed.delta) {
+                  // Handle OpenAI Chat Completions streaming format
+                  if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                    const content = parsed.choices[0].delta.content;
                     hasContent = true;
+                    fullContent += content;
+                    
                     safeEnqueue(`data: ${JSON.stringify({
                       type: 'content',
-                      text: parsed.delta
+                      text: content
                     })}\n\n`);
-                  } else if (parsed.type === 'response.completed') {
+                  }
+                  
+                  // Handle tool calls (file search)
+                  else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.tool_calls) {
                     safeEnqueue(`data: ${JSON.stringify({ 
-                      type: 'complete', 
-                      message: '✅ Document search completed!' 
+                      type: 'status', 
+                      message: '🔍 Searching documents...' 
                     })}\n\n`);
-                    safeClose();
-                    return;
                   }
                 } catch (e) {
                   // Skip invalid JSON
+                  console.log('JSON parse error:', e);
                 }
               }
             }
           }
 
           // Only send completion if we haven't already
-          if (!hasContent && !isClosed) {
+          if (!isClosed) {
             safeEnqueue(`data: ${JSON.stringify({ 
               type: 'complete', 
-              message: '✅ Document search completed!' 
+              message: '✅ Document search completed!',
+              fullContent: fullContent
             })}\n\n`);
+            safeClose();
           }
-          
-          // Close after a small delay to ensure all data is sent
-          setTimeout(() => safeClose(), 100);
           
         } catch (error) {
           console.error('Document search streaming error:', error);
           if (!isClosed) {
             safeEnqueue(`data: ${JSON.stringify({ 
               type: 'error', 
-              message: 'Document search failed' 
+              message: `Document search failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
             })}\n\n`);
             safeClose();
           }
