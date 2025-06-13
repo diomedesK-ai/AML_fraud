@@ -2596,30 +2596,17 @@ ${customPrompt}`,
                   </div>
                 )}
                 
-                {messages.map((msg, idx) => (
-                  <div key={idx} className={`flex items-start gap-3 w-full ${msg.role === 'user' ? 'flex-row-reverse justify-end' : 'justify-start'}`}>
+                {messages.filter(msg => msg.role !== 'user').map((msg, idx) => (
+                  <div key={idx} className={`flex items-start gap-3 w-full justify-start`}>
                     <div className={`w-8 h-8 rounded-full bg-white border-2 border-transparent bg-clip-padding flex items-center justify-center text-gray-700 font-semibold text-xs relative flex-shrink-0`}>
-                      <div className={`absolute inset-0 rounded-full p-0.5 ${
-                        msg.role === 'user' 
-                          ? 'bg-gradient-to-r from-purple-600 to-indigo-700' 
-                          : 'bg-gradient-to-r from-blue-500 to-indigo-600'
-                      }`}>
+                      <div className={`absolute inset-0 rounded-full p-0.5 bg-gradient-to-r from-blue-500 to-indigo-600`}>
                         <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-                          <span className="text-gray-700 font-semibold text-xs">{msg.role === 'user' ? 'SJ' : 'AI'}</span>
+                          <span className="text-gray-700 font-semibold text-xs">AI</span>
                         </div>
                       </div>
                     </div>
-                    <div className={`flex flex-col ${msg.role === 'user' ? 'max-w-[70%] items-end ml-auto' : 'max-w-[85%] items-start mr-auto'}`}>
-                      <div className={`rounded-2xl shadow-sm ${
-                        msg.role === 'user'
-                          ? 'bg-white text-gray-800 rounded-br-md border-2 border-transparent bg-clip-padding px-3 py-1.5'
-                          : 'bg-gray-100 text-gray-900 rounded-bl-md px-3 py-2'
-                      }`} style={msg.role === 'user' ? {
-                        background: 'white',
-                        backgroundImage: 'linear-gradient(white, white), linear-gradient(45deg, #8b5cf6, #6366f1)',
-                        backgroundOrigin: 'border-box',
-                        backgroundClip: 'padding-box, border-box'
-                      } : {}}>
+                    <div className={`flex flex-col max-w-[85%] items-start mr-auto`}>
+                      <div className={`rounded-2xl shadow-sm bg-gray-100 text-gray-900 rounded-bl-md px-3 py-2`}>
                         {msg.content.includes('🔍 **Search Results:**') ? (
                           <div className="space-y-2 text-sm">
                             <div className="font-medium text-blue-600 mb-2 flex items-center gap-2 pb-2 border-b border-blue-100 text-sm">
@@ -2704,14 +2691,14 @@ ${customPrompt}`,
                             </div>
                           </div>
                         ) : (
-                          <div className={`prose prose-sm max-w-none text-xs leading-tight ${msg.role === 'user' ? 'text-right' : ''}`}>
+                          <div className={`prose prose-sm max-w-none text-xs leading-tight`}>
                             {msg.content.split('\n').map((line, idx) => {
                               // Apply markdown formatting to regular messages
                               if (line.startsWith('**') && line.endsWith('**')) {
-                                return <div key={idx} className={`font-semibold text-gray-800 text-xs leading-tight ${msg.role === 'user' ? 'text-right' : ''}`}>{line.replace(/\*\*/g, '')}</div>;
+                                return <div key={idx} className={`font-semibold text-gray-800 text-xs leading-tight`}>{line.replace(/\*\*/g, '')}</div>;
                               } else if (line.includes('**')) {
                                 const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                                return <div key={idx} className={`text-gray-700 text-xs leading-tight ${msg.role === 'user' ? 'text-right' : ''}`}>
+                                return <div key={idx} className={`text-gray-700 text-xs leading-tight`}>
                                   {parts.map((part, partIdx) => {
                                     if (part.startsWith('**') && part.endsWith('**')) {
                                       return <span key={partIdx} className="font-semibold">{part.replace(/\*\*/g, '')}</span>;
@@ -2721,12 +2708,12 @@ ${customPrompt}`,
                                 </div>;
                               } else if (line.startsWith('• ') || line.startsWith('- ')) {
                                 const text = line.replace(/^[•-]\s/, '');
-                                return <div key={idx} className={`flex items-start gap-2 ${msg.role === 'user' ? 'justify-end ml-0 mr-2' : 'ml-2'}`}>
+                                return <div key={idx} className={`flex items-start gap-2 ml-2`}>
                                   <span className="text-blue-500 mt-0.5 text-xs">•</span>
                                   <span className="text-gray-700 text-xs">{text}</span>
                                 </div>;
                               } else if (line.trim()) {
-                                return <div key={idx} className={`text-gray-700 text-xs leading-tight ${msg.role === 'user' ? 'text-right' : ''}`}>{line}</div>;
+                                return <div key={idx} className={`text-gray-700 text-xs leading-tight`}>{line}</div>;
                               }
                               return null;
                             })}
