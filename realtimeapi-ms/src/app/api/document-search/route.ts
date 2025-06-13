@@ -54,49 +54,54 @@ export async function POST(request: NextRequest) {
             message: `📄 Searching documents for: ${query}...` 
           })}\n\n`);
 
-          // Use OpenAI Responses API directly for document search with streaming
+          // Use OpenAI Responses API with file search for document search
           const openaiApiKey = process.env.OPENAI_API_KEY;
           if (!openaiApiKey) {
             throw new Error('OpenAI API key not configured');
           }
 
-          const response = await fetch('https://api.openai.com/v1/beta/chat/completions', {
+          const response = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${openaiApiKey}`,
-              'OpenAI-Beta': 'assistants=v2'
+              'OpenAI-Beta': 'assistants=v2',
             },
             body: JSON.stringify({
               model: 'gpt-4o',
-              messages: [
-                {
-                  role: 'user',
-                  content: query
-                }
-              ],
+              input: `Please search the uploaded documents for information about: ${query}
+
+Provide a comprehensive answer based on the document content including:
+1. Direct information from the documents
+2. Relevant details and context
+3. Any specific data or facts found
+4. Citations or references when possible
+
+Please be thorough in your analysis of the document content.`,
               tools: [
                 {
-                  type: 'file_search'
+                  type: 'file_search',
+                  vector_store_ids: [vectorStoreId],
+                  max_num_results: 10,
+                  ranking_options: {
+                    ranker: 'auto',
+                    score_threshold: 0
+                  }
                 }
               ],
-              tool_resources: {
-                file_search: {
-                  vector_store_ids: [vectorStoreId]
-                }
-              },
               stream: true,
               temperature: 0.3,
-              max_tokens: 2000
+              max_output_tokens: 2000,
+              parallel_tool_calls: true
             }),
           });
 
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`OpenAI API failed: ${response.status} - ${errorText}`);
+            throw new Error(`OpenAI Responses API failed: ${response.status} - ${errorText}`);
           }
 
-          // Handle streaming response
+          // Handle streaming response from Responses API
           const reader = response.body?.getReader();
           if (!reader) {
             throw new Error('No response body');
@@ -133,24 +138,54 @@ export async function POST(request: NextRequest) {
                 try {
                   const parsed = JSON.parse(data);
                   
-                  // Handle OpenAI Chat Completions streaming format
-                  if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                    const content = parsed.choices[0].delta.content;
+                  // Handle Responses API streaming format
+                  if (parsed.output && Array.isArray(parsed.output)) {
+                    for (const output of parsed.output) {
+                      // Handle message content updates
+                      if (output.type === 'message' && output.content) {
+                        for (const content of output.content) {
+                          if (content.type === 'output_text' && content.text) {
+                            hasContent = true;
+                            fullContent = content.text; // Use full text, not append
+                            
+                            safeEnqueue(`data: ${JSON.stringify({
+                              type: 'content',
+                              text: content.text
+                            })}\n\n`);
+                          }
+                        }
+                      }
+                      // Handle file search status updates
+                      else if (output.type === 'file_search_call') {
+                        if (output.status === 'in_progress') {
+                          safeEnqueue(`data: ${JSON.stringify({ 
+                            type: 'status', 
+                            message: '🔍 Searching documents...' 
+                          })}\n\n`);
+                        } else if (output.status === 'completed') {
+                          console.log('✅ File search completed');
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Handle alternative delta format (fallback)
+                  else if (parsed.type === 'response.output_text.delta' && parsed.delta) {
                     hasContent = true;
-                    fullContent += content;
+                    fullContent += parsed.delta;
                     
                     safeEnqueue(`data: ${JSON.stringify({
                       type: 'content',
-                      text: content
+                      text: parsed.delta
                     })}\n\n`);
-                  }
-                  
-                  // Handle tool calls (file search)
-                  else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.tool_calls) {
+                  } else if (parsed.type === 'response.completed') {
                     safeEnqueue(`data: ${JSON.stringify({ 
-                      type: 'status', 
-                      message: '🔍 Searching documents...' 
+                      type: 'complete', 
+                      message: '✅ Document search completed!',
+                      fullContent: fullContent
                     })}\n\n`);
+                    safeClose();
+                    return;
                   }
                 } catch (e) {
                   // Skip invalid JSON

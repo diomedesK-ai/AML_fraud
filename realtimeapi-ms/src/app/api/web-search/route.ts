@@ -47,50 +47,49 @@ export async function POST(request: NextRequest) {
             message: `🔍 Searching for: ${query}...` 
           })}\n\n`);
 
-          // Use OpenAI Responses API directly for web search with streaming
+          // Use OpenAI Responses API with web search for real-time search
           const openaiApiKey = process.env.OPENAI_API_KEY;
           if (!openaiApiKey) {
             throw new Error('OpenAI API key not configured');
           }
 
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          const response = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${openaiApiKey}`,
+              'OpenAI-Beta': 'assistants=v2',
             },
             body: JSON.stringify({
               model: 'gpt-4o',
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are a helpful AI assistant that can search the web for current information. When users ask you to search for something, provide comprehensive and accurate information based on your knowledge. Format your responses clearly with relevant details.'
-                },
-                {
-                  role: 'user',
-                  content: `Please search for and provide comprehensive information about: ${query}
+              input: `Please search for current information about: ${query}
 
-Please provide:
-1. A clear overview of the topic
-2. Key facts and current information
-3. Relevant details that would be helpful
-4. Any important context or background
+Provide comprehensive, up-to-date information including:
+1. Current facts and data
+2. Recent developments or news
+3. Key details and context
+4. Any relevant statistics or numbers
 
-Format your response in a clear, organized manner.`
+Please be thorough and accurate in your search.`,
+              tools: [
+                { 
+                  type: 'web_search_preview',
+                  search_context_size: 'medium'
                 }
               ],
               stream: true,
               temperature: 0.7,
-              max_tokens: 2000
+              max_output_tokens: 2000,
+              parallel_tool_calls: true
             }),
           });
 
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`OpenAI API failed: ${response.status} - ${errorText}`);
+            throw new Error(`OpenAI Responses API failed: ${response.status} - ${errorText}`);
           }
 
-          // Handle streaming response
+          // Handle streaming response from Responses API
           const reader = response.body?.getReader();
           if (!reader) {
             throw new Error('No response body');
@@ -127,16 +126,54 @@ Format your response in a clear, organized manner.`
                 try {
                   const parsed = JSON.parse(data);
                   
-                  // Check for content in the response (OpenAI Chat Completions format)
-                  if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                    const content = parsed.choices[0].delta.content;
+                  // Handle Responses API streaming format
+                  if (parsed.output && Array.isArray(parsed.output)) {
+                    for (const output of parsed.output) {
+                      // Handle message content updates
+                      if (output.type === 'message' && output.content) {
+                        for (const content of output.content) {
+                          if (content.type === 'output_text' && content.text) {
+                            hasContent = true;
+                            fullContent = content.text; // Use full text, not append
+                            
+                            safeEnqueue(`data: ${JSON.stringify({
+                              type: 'content',
+                              text: content.text
+                            })}\n\n`);
+                          }
+                        }
+                      }
+                      // Handle web search status updates
+                      else if (output.type === 'web_search_call') {
+                        if (output.status === 'in_progress') {
+                          safeEnqueue(`data: ${JSON.stringify({ 
+                            type: 'status', 
+                            message: '🌐 Searching the web...' 
+                          })}\n\n`);
+                        } else if (output.status === 'completed') {
+                          console.log('✅ Web search completed');
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Handle alternative delta format (fallback)
+                  else if (parsed.type === 'response.output_text.delta' && parsed.delta) {
                     hasContent = true;
-                    fullContent += content;
+                    fullContent += parsed.delta;
                     
                     safeEnqueue(`data: ${JSON.stringify({
                       type: 'content',
-                      text: content
+                      text: parsed.delta
                     })}\n\n`);
+                  } else if (parsed.type === 'response.completed') {
+                    safeEnqueue(`data: ${JSON.stringify({ 
+                      type: 'complete', 
+                      message: '✅ Search completed!',
+                      fullContent: fullContent
+                    })}\n\n`);
+                    safeClose();
+                    return;
                   }
                 } catch (e) {
                   // Skip invalid JSON
