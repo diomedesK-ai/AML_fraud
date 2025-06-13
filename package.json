@@ -1,0 +1,16 @@
+{
+  "name": "digital-contact-center",
+  "version": "1.0.0",
+  "description": "Digital Contact Center with OpenAI Realtime API integration",
+  "scripts": {
+    "build": "cd realtimeapi-ms && npm install && npm run build",
+    "start": "cd realtimeapi-ms && npm start",
+    "dev": "cd realtimeapi-ms && npm run dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/diomedesK-ai/DigitalContactCenter.git"
+  },
+  "author": "Diomedes Kastanis",
+  "license": "MIT"
+} 
