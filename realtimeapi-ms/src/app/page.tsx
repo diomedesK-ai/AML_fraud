@@ -25,6 +25,7 @@ import {
   FaUndo,
   FaGlobe
 } from 'react-icons/fa';
+import ContactCenterDashboard from '@/components/ContactCenterDashboard';
 
 // Message type for ChatWindow
 interface Message {
@@ -211,9 +212,8 @@ export default function Home() {
           { name: 'Purple Gradient', path: '/purple-gradient-bg.jpg' },
           { name: 'Color2', path: '/color2.jpg' },
           { name: 'Color3', path: '/color3.jpg' },
-          { name: 'Colorful', path: '/colorful.jpg' },
-          { name: 'GTP V3', path: '/gtp_v3.jpg' },
-          { name: 'Gradient Blur', path: '/Gradient Blur 1.jpg' }
+          { name: 'Color4', path: '/color4.jpg' },
+          { name: 'Colorful', path: '/colorful.jpg' }
         ];
 
         // Check which files actually exist
@@ -2164,7 +2164,10 @@ ${customPrompt}`,
 
         {/* Column 3: Chat Area, Knowledge Base, or Settings */}
         <main className="flex-1 flex flex-col bg-white">
-          {selectedNav === 4 ? (
+          {selectedNav === 1 ? (
+            /* Contact Center Dashboard */
+            <ContactCenterDashboard />
+          ) : selectedNav === 4 ? (
             /* Knowledge Base Panel */
             <div className="flex-1 p-6">
               <div className="max-w-4xl">
