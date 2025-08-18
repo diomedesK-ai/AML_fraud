@@ -3,10 +3,7 @@
 import React from 'react';
 
 const EXPERIENCES = [
-  { key: 'city', label: 'City', icon: '🏙️' },
-  { key: 'flight', label: 'Flight', icon: '✈️' },
-  { key: 'night', label: 'Night', icon: '🌃' },
-  { key: 'mountain', label: 'Mountain', icon: '🏔️' },
+  { key: 'wealth', label: 'Wealth Advisory', icon: '◉' },
 ];
 
 type ExperienceSelectorProps = {
@@ -16,19 +13,19 @@ type ExperienceSelectorProps = {
 
 export default function ExperienceSelector({ selected, onSelect }: ExperienceSelectorProps) {
   return (
-    <div className="flex gap-4 py-2">
+    <div className="flex gap-3 py-2">
       {EXPERIENCES.map((exp) => (
         <button
           key={exp.key}
-          className={`flex flex-col items-center px-4 py-2 rounded-lg shadow transition border-2 focus:outline-none ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition border focus:outline-none ${
             selected === exp.key
-              ? 'border-blue-500 bg-blue-100 text-blue-700'
-              : 'border-transparent bg-white/70 hover:bg-blue-50'
+              ? 'border-slate-400 bg-slate-100 text-slate-800'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300'
           }`}
           onClick={() => onSelect(exp.key)}
         >
-          <span className="text-2xl mb-1">{exp.icon}</span>
-          <span className="text-xs font-medium">{exp.label}</span>
+          <span className="text-lg">{exp.icon}</span>
+          <span>{exp.label}</span>
         </button>
       ))}
     </div>

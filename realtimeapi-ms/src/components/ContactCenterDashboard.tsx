@@ -201,16 +201,29 @@ const ContactCenterDashboard: React.FC = () => {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   
-  // Custom prompt for Contact Center
-  const customPrompt = `You are an AI Assistant for a Contact Center environment. You help agents with:
+  // Enhanced Contact Center prompt with web search and knowledge base
+  const [customPrompt] = useState(`You are an AI Assistant for a Contact Center environment. You help agents with:
 
 1. PRODUCT INFORMATION: Provide detailed information about company products, features, pricing, and specifications
-2. POLICY ASSISTANCE: Help with company policies, procedures, and guidelines
+2. POLICY ASSISTANCE: Help with company policies, procedures, and guidelines  
 3. CUSTOMER SUPPORT: Assist with troubleshooting, escalation procedures, and best practices
 4. DOCUMENTATION: Search through knowledge bases and documentation
 5. REAL-TIME SUPPORT: Provide quick answers during live customer interactions
 
-Be professional, concise, and helpful. Always prioritize accuracy and provide actionable information for contact center agents.`;
+CRITICAL SEARCH INSTRUCTIONS:
+- ALWAYS search uploaded documents FIRST for any information related to queries
+- If documents don't contain sufficient information, use web_search for current information
+- For current events, product updates, or time-sensitive information: use web_search
+- For company policies, procedures, or internal information: search documents first
+- When agents need real-time data or external information: use web_search immediately
+
+RESPONSE STRATEGY:
+1. Check knowledge base/documents for company-specific information
+2. Use web search for current external information, updates, or verification
+3. Combine both sources for comprehensive responses
+4. Always indicate your information sources to agents
+
+Be professional, concise, and helpful. Always prioritize accuracy and provide actionable information for contact center agents.`);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -239,10 +252,260 @@ Be professional, concise, and helpful. Always prioritize accuracy and provide ac
 
   // Handle realtime events
   const handleRealtimeEvent = (event: any) => {
-    if (event.type === 'response.audio_transcript.delta') {
-      setCallTranscript(prev => prev + event.delta);
-    } else if (event.type === 'session.created') {
-      setIsSessionReady(true);
+    console.log('📨 Contact Center received event:', event.type, event);
+    
+    switch (event.type) {
+      case 'response.audio_transcript.delta':
+        setCallTranscript(prev => prev + event.delta);
+        break;
+        
+      case 'session.created':
+        setIsSessionReady(true);
+        break;
+        
+      case 'response.function_call_arguments.done':
+        // Handle function calls for search
+        console.log('🔧 Contact Center function call detected:', event.name, event.arguments);
+        if (event.name === 'web_search') {
+          const args = JSON.parse(event.arguments);
+          console.log('🌐 Contact Center searching web for:', args.query);
+          setCallTranscript(prev => prev + `\n\n🔍 **Searching web:** ${args.query}\n\n`);
+          
+          // Add to messages for visibility
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `🔍 Searching the web for: "${args.query}"...`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+          
+          handleWebSearch(args.query, event.call_id);
+        } else if (event.name === 'document_search') {
+          const args = JSON.parse(event.arguments);
+          console.log('📄 Contact Center searching documents for:', args.query);
+          setCallTranscript(prev => prev + `\n\n📄 **Searching documents:** ${args.query}\n\n`);
+          handleDocumentSearch(args.query, event.call_id);
+        }
+        break;
+        
+      case 'response.audio_transcript.done':
+        console.log('AI audio transcript done:', event.transcript);
+        if (event.transcript) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: event.transcript,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+        }
+        break;
+        
+      case 'conversation.item.input_audio_transcription.completed':
+        console.log('User said:', event.transcript);
+        if (event.transcript) {
+          setMessages(prev => [...prev, {
+            role: 'user',
+            content: event.transcript,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+        }
+        break;
+        
+      case 'error':
+        console.error('OpenAI API Error:', event);
+        setCallTranscript(prev => prev + `\n\n❌ **Error:** ${event.error?.message || 'Unknown error'}\n\n`);
+        break;
+        
+      default:
+        console.log('Unhandled Contact Center event:', event.type, event);
+        break;
+    }
+  };
+
+  // Handle web search function call with streaming
+  const handleWebSearch = async (query: string, callId: string) => {
+    try {
+      console.log('🚀 Contact Center starting web search for:', query, 'with callId:', callId);
+      
+      const response = await fetch('/api/web-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query }),
+      });
+      
+      console.log('📡 Contact Center web search API response status:', response.status);
+      
+      if (!response.ok) {
+        console.error('❌ Contact Center web search API error:', response.status, response.statusText);
+        throw new Error('Web search failed');
+      }
+      
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+      
+      let searchResults = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (parsed.type === 'status') {
+                setCallTranscript(prev => prev + `${parsed.message}\n`);
+              } else if (parsed.type === 'content') {
+                console.log('📄 Contact Center received content:', parsed.content?.substring(0, 100));
+                if (parsed.content) {
+                  searchResults += parsed.content;
+                  setCallTranscript(prev => {
+                    const lines = prev.split('\n');
+                    const lastSearchIndex = lines.findLastIndex(line => line.includes('🔍 **Searching web:'));
+                    if (lastSearchIndex !== -1) {
+                      const beforeSearch = lines.slice(0, lastSearchIndex + 1).join('\n');
+                      const formattedResults = searchResults
+                        .replace(/## /g, '\n**')
+                        .replace(/\n\*/g, '\n• ')
+                        .trim();
+                      
+                      return beforeSearch + `\n\n📊 **Live Results:**\n${formattedResults}\n\n`;
+                    }
+                    return prev + searchResults;
+                  });
+                }
+              } else if (parsed.type === 'complete') {
+                if (searchResults.trim()) {
+                  const finalResults = searchResults
+                    .replace(/## /g, '\n**')
+                    .replace(/\n\*/g, '\n• ')
+                    .replace(/°F/g, '°F')
+                    .replace(/°C/g, '°C')
+                    .trim();
+                  
+                  setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: `🔍 **Search Results:**\n\n${finalResults}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }]);
+                }
+                
+                setCallTranscript(prev => prev + `\n\n✅ Web search completed!\n\n`);
+                
+                // Send results back to OpenAI if we have a data channel
+                if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                  const event = {
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: callId,
+                      output: searchResults || 'Search completed successfully'
+                    }
+                  };
+                  dataChannelRef.current.send(JSON.stringify(event));
+                  
+                  const responseEvent = {
+                    type: 'response.create'
+                  };
+                  dataChannelRef.current.send(JSON.stringify(responseEvent));
+                }
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error handling Contact Center web search:', error);
+      setCallTranscript(prev => prev + `\n\n❌ **Web search error:** ${error}\n\n`);
+    }
+  };
+
+  // Handle document search function call
+  const handleDocumentSearch = async (query: string, callId: string) => {
+    try {
+      console.log('🚀 Contact Center starting document search for:', query);
+      
+      const response = await fetch('/api/document-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query }),
+      });
+      
+      if (!response.ok) {
+        console.error('❌ Contact Center document search error:', response.status);
+        throw new Error('Document search failed');
+      }
+      
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+      
+      let searchResults = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (parsed.type === 'content') {
+                searchResults += parsed.content;
+                setCallTranscript(prev => prev + parsed.content);
+              } else if (parsed.type === 'complete') {
+                if (searchResults.trim()) {
+                  setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: `📄 **Document Search Results:**\n\n${searchResults}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }]);
+                }
+                
+                setCallTranscript(prev => prev + `\n\n✅ Document search completed!\n\n`);
+                
+                // Send results back to OpenAI if we have a data channel
+                if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                  const event = {
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: callId,
+                      output: searchResults || 'Document search completed successfully'
+                    }
+                  };
+                  dataChannelRef.current.send(JSON.stringify(event));
+                  
+                  const responseEvent = {
+                    type: 'response.create'
+                  };
+                  dataChannelRef.current.send(JSON.stringify(responseEvent));
+                }
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error handling Contact Center document search:', error);
+      setCallTranscript(prev => prev + `\n\n❌ **Document search error:** ${error}\n\n`);
     }
   };
 
@@ -271,7 +534,8 @@ Be professional, concise, and helpful. Always prioritize accuracy and provide ac
 User Query: ${currentInput}
 
 Please provide a helpful response for the contact center agent.`,
-          stream: true
+          stream: true,
+          vectorStoreId: 'vs_687b5aa0b19c8191bd628a0111b79bc7' // Use the same knowledge base
         }),
       });
       

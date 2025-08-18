@@ -129,16 +129,19 @@ Please be thorough and accurate in your search.`,
                   // Handle Responses API streaming format
                   if (parsed.output && Array.isArray(parsed.output)) {
                     for (const output of parsed.output) {
+                      console.log('🔍 Web search output type:', output.type, output);
+                      
                       // Handle message content updates
                       if (output.type === 'message' && output.content) {
                         for (const content of output.content) {
+                          console.log('📄 Content type:', content.type, 'Text:', content.text?.substring(0, 100));
                           if (content.type === 'output_text' && content.text) {
                             hasContent = true;
                             fullContent = content.text; // Use full text, not append
                             
                             safeEnqueue(`data: ${JSON.stringify({
                               type: 'content',
-                              text: content.text
+                              content: content.text
                             })}\n\n`);
                           }
                         }
@@ -157,6 +160,17 @@ Please be thorough and accurate in your search.`,
                     }
                   }
                   
+                  // Handle direct content updates (alternative format)
+                  else if (parsed.type === 'content' && parsed.text) {
+                    hasContent = true;
+                    fullContent += parsed.text;
+                    
+                    safeEnqueue(`data: ${JSON.stringify({
+                      type: 'content',
+                      content: parsed.text
+                    })}\n\n`);
+                  }
+                  
                   // Handle alternative delta format (fallback)
                   else if (parsed.type === 'response.output_text.delta' && parsed.delta) {
                     hasContent = true;
@@ -164,7 +178,7 @@ Please be thorough and accurate in your search.`,
                     
                     safeEnqueue(`data: ${JSON.stringify({
                       type: 'content',
-                      text: parsed.delta
+                      content: parsed.delta
                     })}\n\n`);
                   } else if (parsed.type === 'response.completed') {
                     safeEnqueue(`data: ${JSON.stringify({ 

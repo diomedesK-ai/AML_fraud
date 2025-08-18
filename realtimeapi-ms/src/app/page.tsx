@@ -26,6 +26,10 @@ import {
   FaGlobe
 } from 'react-icons/fa';
 import ContactCenterDashboard from '@/components/ContactCenterDashboard';
+import ExperienceSelector from '@/components/ExperienceSelector';
+import WealthAdvisorInterface from '@/components/WealthAdvisorInterface';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
+import { getWealthAdvisorPrompt } from '@/utils/wealthAdvisorScenarios';
 
 // Message type for ChatWindow
 interface Message {
@@ -177,7 +181,7 @@ export default function Home() {
   const [isCallActive, setIsCallActive] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callTranscript, setCallTranscript] = useState<string>('');
-  const [customPrompt, setCustomPrompt] = useState<string>('Please add your prompt for your agent');
+  const [customPrompt, setCustomPrompt] = useState<string>(getWealthAdvisorPrompt());
   const [promptInput, setPromptInput] = useState<string>('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -202,6 +206,112 @@ export default function Home() {
     { name: 'Purple Gradient', path: '/purple-gradient-bg.jpg' }
   ]);
   const [currentWallpaperIndex, setCurrentWallpaperIndex] = useState(0);
+
+  // Experience selector states
+  const [selectedExperience, setSelectedExperience] = useState<string>('wealth');
+  const [showWealthAdvisor, setShowWealthAdvisor] = useState(true);
+
+  // Handle experience selection
+  const handleExperienceSelect = (experience: string) => {
+    setSelectedExperience(experience);
+    if (experience === 'wealth') {
+      setShowWealthAdvisor(true);
+      // Set the wealth advisor prompt automatically
+      const wealthPrompt = getWealthAdvisorPrompt();
+      setCustomPrompt(wealthPrompt);
+    } else {
+      setShowWealthAdvisor(false);
+    }
+  };
+
+  // Handle wealth advisor scenario selection
+  const handleWealthScenarioSelect = (scenarioPrompt: string) => {
+    setCustomPrompt(scenarioPrompt);
+    setShowWealthAdvisor(false);
+    // Show a welcome message for the selected scenario
+    const welcomeMessage: Message = {
+      role: 'assistant',
+      content: "I've configured myself as your Private Wealth Advisor with the selected client scenario. I'm ready to provide comprehensive wealth management guidance. How can I assist you today?",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setMessages([welcomeMessage]);
+  };
+
+  // Handle immediate wealth advisor analysis
+  const handleImmediateAnalysis = async (analysisPrompt: string, analysisType: string, clientName: string) => {
+    setCustomPrompt(analysisPrompt);
+    setShowWealthAdvisor(false);
+    setLoading(true);
+
+    // Add user message indicating the analysis request
+    const userMessage: Message = {
+      role: 'user',
+      content: `Please provide a ${analysisType} for ${clientName}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    try {
+      console.log('🚀 Starting immediate wealth analysis...');
+      console.log('📝 Analysis type:', analysisType);
+      console.log('💼 Client:', clientName);
+
+      // Use the chat API which we know works
+      const formattedPrompt = `${analysisPrompt}
+
+**RESPONSE FORMATTING REQUIREMENTS:**
+1. Use clear markdown formatting with headers (##, ###)
+2. Use bullet points and numbered lists for recommendations
+3. Include specific data points and percentages where relevant
+4. Structure response with clear sections and subsections
+5. End with a clear "Next Steps" or "Action Items" section
+6. Use **bold** for key terms and important figures
+7. Use tables for comparative data when applicable
+
+Please provide a comprehensive, well-formatted response that follows these formatting guidelines.`;
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: [
+            {
+              role: 'user',
+              content: formattedPrompt
+            }
+          ]
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('💬 Chat API response:', result);
+      
+      // Extract content from OpenAI chat completion format
+      const content = result.choices?.[0]?.message?.content || 'Analysis completed successfully.';
+      
+      // Add the response to messages
+      const responseMessage: Message = {
+        role: 'assistant',
+        content: content,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => [...prev, responseMessage]);
+    } catch (error) {
+      console.error('Error in immediate analysis:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `I apologize, but I encountered an error while generating the ${analysisType}. Please try again or let me know if you'd like assistance with something else.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Load available wallpapers dynamically
   React.useEffect(() => {
@@ -1377,6 +1487,8 @@ WEB SEARCH RULES:
 - If you don't have current information about something, offer to search the web
 - For current events, news, or time-sensitive information, automatically suggest web search
 - When providing answers, if web search would be helpful, ask: "Would you like me to search online for more current information?"
+- For financial markets, interest rates, exchange rates, or economic data: IMMEDIATELY use web_search function
+- WEALTH ADVISORS ALWAYS need current market data - use web_search proactively
 
 DOCUMENT SEARCH CAPABILITY:
 - You have access to uploaded documents through file search
@@ -1507,14 +1619,23 @@ ${customPrompt}`,
         
       case 'response.function_call_arguments.done':
         // Handle function calls
+        console.log('🔧 Function call detected:', event.name, event.arguments);
         if (event.name === 'web_search') {
           const args = JSON.parse(event.arguments);
-          console.log('AI is searching the web for:', args.query);
+          console.log('🌐 AI is searching the web for:', args.query);
           setCallTranscript(prev => prev + `\n\n🔍 **Searching web:** ${args.query}\n\n`);
+          
+          // Also add to main chat for visibility
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `🔍 Searching the web for: "${args.query}"...`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+          
           handleWebSearch(args.query, event.call_id);
         } else if (event.name === 'document_search') {
           const args = JSON.parse(event.arguments);
-          console.log('AI is searching documents for:', args.query);
+          console.log('📄 AI is searching documents for:', args.query);
           setCallTranscript(prev => prev + `\n\n📄 **Searching documents:** ${args.query}\n\n`);
           handleDocumentSearch(args.query, event.call_id);
         }
@@ -1637,7 +1758,7 @@ ${customPrompt}`,
   // Handle web search function call with streaming
   const handleWebSearch = async (query: string, callId: string) => {
     try {
-      console.log('Performing streaming web search for:', query);
+      console.log('🚀 Starting web search for:', query, 'with callId:', callId);
       
       // Call our streaming web search API
       const response = await fetch('/api/web-search', {
@@ -1648,7 +1769,10 @@ ${customPrompt}`,
         body: JSON.stringify({ query }),
       });
       
+      console.log('📡 Web search API response status:', response.status);
+      
       if (!response.ok) {
+        console.error('❌ Web search API error:', response.status, response.statusText);
         throw new Error('Web search failed');
       }
       
@@ -1679,9 +1803,11 @@ ${customPrompt}`,
               if (parsed.type === 'status') {
                 // Update transcript with search status
                 setCallTranscript(prev => prev + `\n\n${parsed.message}\n\n`);
-              } else if (parsed.type === 'content' && parsed.text) {
+              } else if (parsed.type === 'content' && (parsed.text || parsed.content)) {
                 // Accumulate search results from content chunks
-                searchResults += parsed.text;
+                const contentText = parsed.content || parsed.text;
+                console.log('📄 Main page received content:', contentText?.substring(0, 100));
+                searchResults += contentText;
                 // Update transcript in real-time with better formatting
                 setCallTranscript(prev => {
                   const lines = prev.split('\n');
@@ -1854,9 +1980,11 @@ ${customPrompt}`,
               if (parsed.type === 'status') {
                 // Update transcript with search status
                 setCallTranscript(prev => prev + `\n\n${parsed.message}\n\n`);
-              } else if (parsed.type === 'content' && parsed.text) {
+              } else if (parsed.type === 'content' && (parsed.text || parsed.content)) {
                 // Accumulate search results from content chunks (same as web search)
-                searchResults += parsed.text;
+                const contentText = parsed.content || parsed.text;
+                console.log('📄 Main page document search received content:', contentText?.substring(0, 100));
+                searchResults += contentText;
                 // Update transcript in real-time with better formatting
                 setCallTranscript(prev => {
                   const lines = prev.split('\n');
@@ -2539,6 +2667,24 @@ ${customPrompt}`,
                 </div>
               </div>
 
+              {/* Experience Selector */}
+              <div className="px-6 py-2 border-b border-gray-100 bg-gray-50">
+                <ExperienceSelector 
+                  selected={selectedExperience} 
+                  onSelect={handleExperienceSelect} 
+                />
+              </div>
+
+              {/* Wealth Advisor Interface */}
+              {showWealthAdvisor && (
+                <div className="px-6 py-4 border-b border-gray-100">
+                  <WealthAdvisorInterface 
+                    onScenarioSelect={handleWealthScenarioSelect}
+                    onImmediateAnalysis={handleImmediateAnalysis}
+                  />
+                </div>
+              )}
+
               {/* Chat Messages */}
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                 {/* Live Call Transcript */}
@@ -2694,33 +2840,10 @@ ${customPrompt}`,
                             </div>
                           </div>
                         ) : (
-                          <div className={`prose prose-sm max-w-none text-xs leading-tight`}>
-                            {msg.content.split('\n').map((line, idx) => {
-                              // Apply markdown formatting to regular messages
-                              if (line.startsWith('**') && line.endsWith('**')) {
-                                return <div key={idx} className={`font-semibold text-gray-800 text-xs leading-tight`}>{line.replace(/\*\*/g, '')}</div>;
-                              } else if (line.includes('**')) {
-                                const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                                return <div key={idx} className={`text-gray-700 text-xs leading-tight`}>
-                                  {parts.map((part, partIdx) => {
-                                    if (part.startsWith('**') && part.endsWith('**')) {
-                                      return <span key={partIdx} className="font-semibold">{part.replace(/\*\*/g, '')}</span>;
-                                    }
-                                    return part;
-                                  })}
-                                </div>;
-                              } else if (line.startsWith('• ') || line.startsWith('- ')) {
-                                const text = line.replace(/^[•-]\s/, '');
-                                return <div key={idx} className={`flex items-start gap-2 ml-2`}>
-                                  <span className="text-blue-500 mt-0.5 text-xs">•</span>
-                                  <span className="text-gray-700 text-xs">{text}</span>
-                                </div>;
-                              } else if (line.trim()) {
-                                return <div key={idx} className={`text-gray-700 text-xs leading-tight`}>{line}</div>;
-                              }
-                              return null;
-                            })}
-                          </div>
+                          <MarkdownRenderer 
+                            content={msg.content}
+                            className="text-xs"
+                          />
                         )}
                       </div>
                       {msg.timestamp && (
