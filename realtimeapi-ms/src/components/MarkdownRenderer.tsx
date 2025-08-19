@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { ReactNode } from 'react';
 
 interface MarkdownRendererProps {
   content: string;
@@ -10,11 +10,11 @@ interface MarkdownRendererProps {
 export default function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
   const renderContent = (text: string) => {
     const lines = text.split('\n');
-    const result: JSX.Element[] = [];
+    const result: React.ReactElement[] = [];
     let inList = false;
-    let listItems: JSX.Element[] = [];
+    let listItems: React.ReactElement[] = [];
     let inTable = false;
-    let tableRows: JSX.Element[] = [];
+    let tableRows: React.ReactElement[] = [];
     let tableHeaders: string[] = [];
 
     const flushList = () => {
@@ -180,11 +180,11 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
     return result;
   };
 
-  const formatInlineText = (text: string): React.ReactNode => {
+  const formatInlineText = (text: string): ReactNode => {
     if (!text) return text;
 
     // Handle bold text (**text**)
-    let result: React.ReactNode = text;
+    let result: ReactNode = text;
     
     // Process bold text
     result = text.split(/(\*\*[^*]+\*\*)/g).map((part, idx) => {
