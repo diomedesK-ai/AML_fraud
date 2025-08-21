@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   FaRegComments, 
   FaMicrophone, 
@@ -49,12 +50,12 @@ interface Conversation {
 }
 
 const NAV_ITEMS = [
-  { icon: <FaRegComments size={20} />, label: 'Communications', active: true },
-  { icon: <FaPhone size={20} />, label: 'Contact Center', active: false },
-  { icon: <FaVideo size={20} />, label: 'Video Conferencing', active: false },
-  { icon: <FaBell size={20} />, label: 'Alerts & Notifications', active: false },
-  { icon: <FaArchive size={20} />, label: 'Knowledge Base', active: false },
-  { icon: <FaCog size={20} />, label: 'Settings', active: false },
+  { icon: <FaRegComments size={20} />, label: 'Wealth Management', key: 'wealth', active: true },
+  { icon: <FaPhone size={20} />, label: 'Contact Center', key: 'contact', active: false },
+  { icon: <FaVideo size={20} />, label: 'Video Conferencing', key: 'video', active: false },
+  { icon: <FaBell size={20} />, label: 'Alerts & Notifications', key: 'alerts', active: false },
+  { icon: <FaArchive size={20} />, label: 'Knowledge Base', key: 'knowledge', active: false },
+  { icon: <FaCog size={20} />, label: 'Settings', key: 'settings', active: false },
 ];
 
 const MOCK_CONVERSATIONS: Conversation[] = [
@@ -134,7 +135,7 @@ const MOCK_CONVERSATIONS: Conversation[] = [
 
 const MESSAGE_TABS = ['Comms', 'Priority', 'Escalations', 'Archive'];
 
-export default function Home() {
+function HomeContent() {
   // Add custom CSS for breathing animation and line clamp
   React.useEffect(() => {
     const style = document.createElement('style');
@@ -184,6 +185,35 @@ export default function Home() {
   const [customPrompt, setCustomPrompt] = useState<string>(getWealthAdvisorPrompt());
   const [promptInput, setPromptInput] = useState<string>('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  
+  // URL routing for navigation
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [currentView, setCurrentView] = useState<'wealth' | 'contact'>('wealth');
+
+  // Handle URL-based navigation
+  useEffect(() => {
+    const view = searchParams.get('view');
+    if (view === 'contact') {
+      setCurrentView('contact');
+      setSelectedNav(1); // Contact Center nav item
+    } else {
+      setCurrentView('wealth');
+      setSelectedNav(0); // Wealth Management nav item
+    }
+  }, [searchParams]);
+
+  // Navigation handler
+  const handleNavigation = (navIndex: number, key: string) => {
+    setSelectedNav(navIndex);
+    if (key === 'wealth') {
+      setCurrentView('wealth');
+      router.push('/?view=wealth');
+    } else if (key === 'contact') {
+      setCurrentView('contact');
+      router.push('/?view=contact');
+    }
+  };
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
@@ -2158,7 +2188,7 @@ ${customPrompt}`,
               {NAV_ITEMS.map((item, idx) => (
                 <button
                   key={item.label}
-                  onClick={() => setSelectedNav(idx)}
+                  onClick={() => handleNavigation(idx, item.key)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                     selectedNav === idx
                       ? 'bg-gray-800 text-white shadow-lg border-2 border-transparent bg-clip-padding relative'
@@ -2292,7 +2322,7 @@ ${customPrompt}`,
 
         {/* Column 3: Chat Area, Knowledge Base, or Settings */}
         <main className="flex-1 flex flex-col bg-white">
-          {selectedNav === 1 ? (
+          {currentView === 'contact' ? (
             /* Contact Center Dashboard */
             <ContactCenterDashboard />
           ) : selectedNav === 4 ? (
@@ -3019,5 +3049,13 @@ ${customPrompt}`,
         </div>
       )}
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }
