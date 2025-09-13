@@ -653,7 +653,29 @@ export default function BancassuranceInterface() {
           messages: [
             {
               role: 'system',
-              content: `You are an AI underwriting assistant for bancassurance products. Analyze the customer profile and provide a realistic underwriting decision with reasoning.`
+              content: `You are an expert AI underwriting assistant specializing in bancassurance products. Your role is to conduct thorough risk assessment and provide professional underwriting decisions.
+
+**Your Expertise:**
+- Life, Health, Critical Illness, and Education insurance underwriting
+- Risk assessment based on age, health, occupation, and financial profile
+- Regulatory compliance (MAS guidelines)
+- Premium pricing and policy terms
+
+**Analysis Framework:**
+1. **Risk Assessment**: Evaluate age, health status, occupation risk, lifestyle factors
+2. **Financial Capacity**: Assess income, existing coverage, affordability
+3. **Regulatory Compliance**: Ensure MAS suitability requirements
+4. **Decision Rationale**: Provide clear, professional reasoning
+
+**Output Format:**
+- **Decision**: APPROVED / DECLINED / REVIEW REQUIRED
+- **Premium**: Suggested premium amount (if approved)
+- **Risk Rating**: Low / Medium / High
+- **Key Factors**: List main decision factors
+- **Conditions**: Any special terms or exclusions
+- **Reasoning**: Professional explanation of decision
+
+Be thorough, objective, and provide actionable insights for the bancassurance team.`
             },
             {
               role: 'user',
@@ -708,52 +730,87 @@ Provide a JSON response with:
     setIsUnderwriting(false);
   };
 
-  // Send WhatsApp campaign with dynamic content
+  // Send WhatsApp campaign with AI-generated dynamic content
   const handleWhatsAppCampaign = async () => {
     if (!selectedCustomer) return;
     
     setIsSendingCampaign(true);
     
-    // Get the primary recommended product
-    const primaryProduct = Object.entries(selectedCustomer.needs)
-      .reduce((max, [key, value]) => value > max.value ? {key, value} : max, {key: '', value: 0});
-    
-    const productNames = {
-      life: 'Life Insurance',
-      health: 'Health Insurance', 
-      critical: 'Critical Illness Coverage',
-      education: 'Education Savings Plan'
-    };
-    
-    // Dynamic WhatsApp-friendly message
-    const whatsappMessage = `🏦 *Hi ${selectedCustomer.name}!*
+    try {
+      // Get the primary recommended product
+      const primaryProduct = Object.entries(selectedCustomer.needs)
+        .reduce((max, [key, value]) => value > max.value ? {key, value} : max, {key: '', value: 0});
+      
+      const productNames = {
+        life: 'Life Insurance',
+        health: 'Health Insurance', 
+        critical: 'Critical Illness Coverage',
+        education: 'Education Savings Plan'
+      };
 
-✨ Our AI analysis shows you're a *${selectedCustomer.propensityScore}% match* for our ${productNames[primaryProduct.key as keyof typeof productNames]} plan!
+      // Generate personalized WhatsApp message using AI
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert WhatsApp marketing specialist for bancassurance products. Create personalized, engaging WhatsApp messages that convert leads into customers.
 
-📊 *Personalized for you:*
-• Age: ${selectedCustomer.age} years
-• Segment: ${selectedCustomer.segment} Banking
-• Family: ${selectedCustomer.demographics.dependents} dependents
+**Your Expertise:**
+- WhatsApp-friendly formatting (emojis, bullet points, short paragraphs)
+- Personalized messaging based on customer data
+- Compelling value propositions
+- Clear call-to-actions
+- Professional yet friendly tone
 
-💡 *Why this matters:*
-${primaryProduct.key === 'life' ? '👨‍👩‍👧‍👦 Protect your family\'s future with comprehensive life coverage' :
-  primaryProduct.key === 'health' ? '🏥 Secure healthcare access with premium medical coverage' :
-  primaryProduct.key === 'critical' ? '🛡️ Financial protection against critical illness risks' :
-  '🎓 Build your children\'s education fund with tax benefits'}
+**Message Requirements:**
+- Maximum 200 words
+- Use emojis strategically (not overwhelming)
+- Include personalized customer details
+- Highlight product benefits specific to customer profile
+- End with clear next steps and call-to-action
+- Use *bold* for emphasis
+- Include numbered options for response
 
-🎯 *Special Offer:* Premium rates starting from $${selectedCustomer.income >= 100000 ? '250' : '150'}/month
+**Tone:** Professional, friendly, persuasive, and trustworthy.
+**Goal:** Generate interest and prompt immediate response for consultation.`
+            },
+            {
+              role: 'user',
+              content: `Create a personalized WhatsApp campaign message for:
 
-Would you like to:
-1️⃣ Schedule a 15-min consultation 📞
-2️⃣ Get detailed quote 📋
-3️⃣ Learn more about benefits 📚
+Customer: ${selectedCustomer.name}
+Age: ${selectedCustomer.age}
+Occupation: ${selectedCustomer.demographics.occupation}
+Marital Status: ${selectedCustomer.demographics.maritalStatus}
+Dependents: ${selectedCustomer.demographics.dependents}
+Income: $${selectedCustomer.income.toLocaleString()}
+Banking Segment: ${selectedCustomer.segment}
+Propensity Score: ${selectedCustomer.propensityScore}%
 
-Reply with the number or call us! 🤝`;
+Recommended Product: ${productNames[primaryProduct.key as keyof typeof productNames]}
+Match Score: ${primaryProduct.value}%
 
-    // Simulate API call
-    setTimeout(() => {
+Key Needs Analysis:
+- Life Insurance: ${selectedCustomer.needs.life}%
+- Health Insurance: ${selectedCustomer.needs.health}%
+- Critical Illness: ${selectedCustomer.needs.critical}%
+- Education Savings: ${selectedCustomer.needs.education}%
+
+Create a compelling WhatsApp message that addresses their specific needs and motivates them to respond.`
+            }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      const whatsappMessage = data.choices[0].message.content;
+
       // Add to campaign history
-      const newCampaign = {
+      setTimeout(() => {
+        const newCampaign = {
         id: campaignHistory.length + 1,
         customer: selectedCustomer.name,
         date: new Date().toISOString().split('T')[0],
@@ -769,8 +826,112 @@ Reply with the number or call us! 🤝`;
       // Show success message in modal
       setCampaignPreviewMessage(whatsappMessage);
       setShowCampaignPreview(true);
-      console.log('Full WhatsApp Message:', whatsappMessage);
+      console.log('AI-Generated WhatsApp Message:', whatsappMessage);
     }, 2000);
+      
+    } catch (error) {
+      console.error('WhatsApp campaign generation error:', error);
+      
+      // Fallback to basic message if AI generation fails
+      const fallbackMessage = `Hi ${selectedCustomer.name}! 🏦\n\nOur analysis shows you're a great fit for ${productNames[primaryProduct.key as keyof typeof productNames]}.\n\nWould you like to:\n1️⃣ Schedule consultation\n2️⃣ Get quote\n3️⃣ Learn more\n\nReply with the number!`;
+      
+      setTimeout(() => {
+        const newCampaign = {
+          id: campaignHistory.length + 1,
+          customer: selectedCustomer.name,
+          date: new Date().toISOString().split('T')[0],
+          type: productNames[primaryProduct.key as keyof typeof productNames],
+          status: "Delivered",
+          response: "Pending",
+          conversion: "Sent"
+        };
+        
+        setCampaignHistory([newCampaign, ...campaignHistory]);
+        setIsSendingCampaign(false);
+        setCampaignPreviewMessage(fallbackMessage);
+        setShowCampaignPreview(true);
+      }, 2000);
+    }
+  };
+
+  // Generate AI analysis for What If simulation
+  const generateWhatIfAnalysis = async (params: {age: number; income: number; dependents: number; riskTolerance: number}) => {
+    if (!selectedCustomer) return;
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert What If analysis specialist for bancassurance products. Analyze parameter changes and provide insightful recommendations about how these changes affect insurance needs and product suitability.
+
+**Your Expertise:**
+- Impact analysis of demographic and financial changes
+- Insurance needs assessment based on life changes
+- Product recommendation adjustments
+- Risk profile evaluation
+- Financial planning implications
+
+**Analysis Framework:**
+1. **Change Impact**: Analyze how each parameter change affects insurance needs
+2. **Risk Assessment**: Evaluate new risk profile based on changes
+3. **Product Suitability**: Recommend product adjustments
+4. **Premium Impact**: Estimate how changes affect pricing
+5. **Strategic Insights**: Provide actionable recommendations
+
+**Output Format:**
+- **Key Changes**: Summarize the main parameter changes
+- **Impact Analysis**: How changes affect insurance needs (2-3 key points)
+- **Product Recommendations**: Updated product priorities with reasoning
+- **Risk Profile**: New risk assessment
+- **Next Steps**: Actionable recommendations
+
+**Tone:** Professional, analytical, and advisory.
+**Goal:** Provide clear insights on how life changes impact insurance strategy.`
+            },
+            {
+              role: 'user',
+              content: `Analyze the What If scenario changes for customer ${selectedCustomer.name}:
+
+**Original Profile:**
+- Age: ${selectedCustomer.age}
+- Income: $${selectedCustomer.income.toLocaleString()}
+- Dependents: ${selectedCustomer.demographics.dependents}
+- Current Needs: Life ${selectedCustomer.needs.life}%, Health ${selectedCustomer.needs.health}%, Critical ${selectedCustomer.needs.critical}%, Education ${selectedCustomer.needs.education}%
+
+**Simulated Changes:**
+- New Age: ${params.age} (${params.age > selectedCustomer.age ? '+' : ''}${params.age - selectedCustomer.age} years)
+- New Income: $${params.income.toLocaleString()} (${params.income > selectedCustomer.income ? '+' : ''}$${(params.income - selectedCustomer.income).toLocaleString()})
+- New Dependents: ${params.dependents} (${params.dependents > selectedCustomer.demographics.dependents ? '+' : ''}${params.dependents - selectedCustomer.demographics.dependents})
+- Risk Tolerance: ${params.riskTolerance}/10
+
+**Customer Context:**
+- Occupation: ${selectedCustomer.demographics.occupation}
+- Marital Status: ${selectedCustomer.demographics.maritalStatus}
+- Banking Segment: ${selectedCustomer.segment}
+- Current Propensity Score: ${selectedCustomer.propensityScore}%
+
+Provide a comprehensive What If analysis explaining how these changes impact their insurance strategy and recommendations.`
+            }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      const analysisResult = data.choices[0].message.content;
+      
+      // Store the analysis result (you might want to add a state for this)
+      console.log('What If Analysis Generated:', analysisResult);
+      
+      // You could display this in the AI Recommendations section or create a dedicated What If results area
+      // For now, we'll log it and it could be shown in the recommendations section
+      
+    } catch (error) {
+      console.error('What If analysis generation error:', error);
+    }
   };
 
   // Chat functionality
@@ -2752,9 +2913,12 @@ If asked about specific recommendations or underwriting for the current customer
                         riskTolerance: parseInt(formData.get('riskTolerance') as string) || 5
                       };
                       
-                      // Update simulation parameters
+                      // Update simulation parameters and generate AI analysis
                       setSimulationParams(params);
                       console.log('Simulation parameters updated:', params);
+                      
+                      // Generate AI analysis of the simulation changes
+                      generateWhatIfAnalysis(params);
                     }
                     
                     setShowWhatIfModal(false);
