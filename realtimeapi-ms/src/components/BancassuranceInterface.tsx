@@ -792,22 +792,21 @@ Reply with the number or call us! 🤝`;
     setIsStreaming(true);
     setStreamingMessage('');
 
-    try {
-      // Detect if user is calling specific assistant
-      let assistantType: 'insurance' | 'bank' | null = null;
-      let cleanedInput = currentInput;
+    // Detect if user is calling specific assistant
+    let assistantType: 'insurance' | 'bank' | null = null;
+    let cleanedInput = currentInput;
 
-      if (currentInput.toLowerCase().includes('@insure')) {
-        assistantType = 'insurance';
-        cleanedInput = currentInput.replace(/@insure/gi, '').trim();
-      } else if (currentInput.toLowerCase().includes('@bank')) {
-        assistantType = 'bank';
-        cleanedInput = currentInput.replace(/@bank/gi, '').trim();
-      }
+    if (currentInput.toLowerCase().includes('@insure')) {
+      assistantType = 'insurance';
+      cleanedInput = currentInput.replace(/@insure/gi, '').trim();
+    } else if (currentInput.toLowerCase().includes('@bank')) {
+      assistantType = 'bank';
+      cleanedInput = currentInput.replace(/@bank/gi, '').trim();
+    }
 
-      // Create system prompt based on assistant type
-      let systemPrompt = '';
-      const customerContext = selectedCustomer ? `
+    // Create system prompt based on assistant type
+    let systemPrompt = '';
+    const customerContext = selectedCustomer ? `
 Current Customer Context:
 - Name: ${selectedCustomer.name}
 - Age: ${selectedCustomer.age}, ${selectedCustomer.demographics.maritalStatus}, ${selectedCustomer.demographics.dependents} children
@@ -827,8 +826,8 @@ IMPORTANT: Your recommendations must be consistent with the dashboard analysis:
 
 Always cite your sources and ensure recommendations match the dashboard's decision tree analysis.` : '';
 
-      if (assistantType === 'insurance') {
-        systemPrompt = `You are an Insurance Guru, an expert in all aspects of insurance products, policies, regulations, and customer needs. You specialize in life insurance, health insurance, critical illness coverage, and education savings plans. 
+    if (assistantType === 'insurance') {
+      systemPrompt = `You are an Insurance Guru, an expert in all aspects of insurance products, policies, regulations, and customer needs. You specialize in life insurance, health insurance, critical illness coverage, and education savings plans. 
 
 ${customerContext}
 
@@ -840,8 +839,8 @@ You can help with:
 - Detailed explanations of insurance products
 
 Provide expert advice with confidence and authority. Use markdown formatting for clear, professional responses.`;
-      } else if (assistantType === 'bank') {
-        systemPrompt = `You are a Bank Guru, an expert in banking services, financial products, lending, investments, and bancassurance. You understand how banks integrate insurance products with traditional banking services.
+    } else if (assistantType === 'bank') {
+      systemPrompt = `You are a Bank Guru, an expert in banking services, financial products, lending, investments, and bancassurance. You understand how banks integrate insurance products with traditional banking services.
 
 ${customerContext}
 
@@ -853,8 +852,8 @@ You can help with:
 - Bancassurance product integration
 
 Provide expert banking advice with confidence and authority. Use markdown formatting for clear, professional responses.`;
-      } else {
-        systemPrompt = `You are a Bancassurance Assistant, expert in both banking and insurance products. You help with customer analysis, product recommendations, and general bancassurance inquiries.
+    } else {
+      systemPrompt = `You are a Bancassurance Assistant, expert in both banking and insurance products. You help with customer analysis, product recommendations, and general bancassurance inquiries.
 
 ${customerContext}
 
@@ -867,8 +866,9 @@ You can help with:
 - Banking and insurance integration
 
 If asked about specific recommendations or underwriting for the current customer, provide detailed analysis based on their profile data. Use markdown formatting for clear, professional responses.`;
-      }
+    }
 
+    try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

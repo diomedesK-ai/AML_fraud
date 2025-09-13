@@ -478,37 +478,8 @@ Please provide a comprehensive, well-formatted response that follows these forma
     setCurrentWallpaperIndex((prev) => (prev + 1) % wallpapers.length);
   };
 
-  // Initialize vector store on component mount
-  React.useEffect(() => {
-    const initializeVectorStore = async () => {
-      const savedVectorStoreId = localStorage.getItem('vectorStoreId');
-      if (savedVectorStoreId) {
-        setVectorStoreId(savedVectorStoreId);
-        loadUploadedFiles(savedVectorStoreId);
-      } else {
-        // Create new vector store
-        try {
-          const response = await fetch('/api/vector-store', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'create' }),
-          });
-          const data = await response.json();
-          if (data.success) {
-            setVectorStoreId(data.vectorStore.id);
-            localStorage.setItem('vectorStoreId', data.vectorStore.id);
-          }
-        } catch (error) {
-          console.error('Failed to create vector store:', error);
-        }
-      }
-    };
-
-    initializeVectorStore();
-  }, []);
-
   // Load uploaded files for vector store
-  const loadUploadedFiles = async (storeId: string) => {
+  const loadUploadedFiles = React.useCallback(async (storeId: string) => {
     try {
       console.log('🔄 Refreshing file status for vector store:', storeId);
       const response = await fetch(`/api/vector-store?vectorStoreId=${storeId}`);
@@ -539,7 +510,37 @@ Please provide a comprehensive, well-formatted response that follows these forma
     } catch (error) {
       console.error('Failed to load files:', error);
     }
-  };
+  }, []);
+
+  // Initialize vector store on component mount
+  React.useEffect(() => {
+    const initializeVectorStore = async () => {
+      const savedVectorStoreId = localStorage.getItem('vectorStoreId');
+      if (savedVectorStoreId) {
+        setVectorStoreId(savedVectorStoreId);
+        loadUploadedFiles(savedVectorStoreId);
+      } else {
+        // Create new vector store
+        try {
+          const response = await fetch('/api/vector-store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'create' }),
+          });
+          const data = await response.json();
+          if (data.success) {
+            setVectorStoreId(data.vectorStore.id);
+            localStorage.setItem('vectorStoreId', data.vectorStore.id);
+          }
+        } catch (error) {
+          console.error('Failed to create vector store:', error);
+        }
+      }
+    };
+
+    initializeVectorStore();
+  }, [loadUploadedFiles]);
+
 
   // Handle file upload
   const handleFileUpload = async (files: FileList) => {
