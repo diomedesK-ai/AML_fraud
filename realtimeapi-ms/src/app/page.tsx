@@ -11,7 +11,6 @@ import {
   FaPlus,
   FaEllipsisV,
   FaPhone,
-  FaVideo,
   FaInfoCircle,
   FaBell,
   FaArchive,
@@ -24,11 +23,13 @@ import {
   FaFileAlt,
   FaChevronRight,
   FaUndo,
-  FaGlobe
+  FaGlobe,
+  FaUniversity
 } from 'react-icons/fa';
 import ContactCenterDashboard from '@/components/ContactCenterDashboard';
 import ExperienceSelector from '@/components/ExperienceSelector';
 import WealthAdvisorInterface from '@/components/WealthAdvisorInterface';
+import BancassuranceInterface from '@/components/BancassuranceInterface';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { getWealthAdvisorPrompt } from '@/utils/wealthAdvisorScenarios';
 
@@ -52,10 +53,10 @@ interface Conversation {
 const NAV_ITEMS = [
   { icon: <FaRegComments size={20} />, label: 'Wealth Management', key: 'wealth', active: true },
   { icon: <FaPhone size={20} />, label: 'Contact Center', key: 'contact', active: false },
-  { icon: <FaVideo size={20} />, label: 'Video Conferencing', key: 'video', active: false },
+  { icon: <FaUniversity size={20} />, label: 'Bancassurance', key: 'bancassurance', active: false },
   { icon: <FaBell size={20} />, label: 'Alerts & Notifications', key: 'alerts', active: false },
   { icon: <FaArchive size={20} />, label: 'Knowledge Base', key: 'knowledge', active: false },
-  { icon: <FaCog size={20} />, label: 'Settings', key: 'settings', active: false },
+  { icon: <FaCog size={20} />, label: 'Global Settings', key: 'settings', active: false },
 ];
 
 const MOCK_CONVERSATIONS: Conversation[] = [
@@ -189,7 +190,7 @@ function HomeContent() {
   // URL routing for navigation
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<'wealth' | 'contact'>('wealth');
+  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'knowledge' | 'settings'>('wealth');
 
   // Handle URL-based navigation
   useEffect(() => {
@@ -197,6 +198,15 @@ function HomeContent() {
     if (view === 'contact') {
       setCurrentView('contact');
       setSelectedNav(1); // Contact Center nav item
+    } else if (view === 'bancassurance') {
+      setCurrentView('bancassurance');
+      setSelectedNav(2); // Bancassurance nav item
+    } else if (view === 'knowledge') {
+      setCurrentView('knowledge');
+      setSelectedNav(4); // Knowledge Base nav item
+    } else if (view === 'settings') {
+      setCurrentView('settings');
+      setSelectedNav(5); // Settings nav item
     } else {
       setCurrentView('wealth');
       setSelectedNav(0); // Wealth Management nav item
@@ -212,6 +222,15 @@ function HomeContent() {
     } else if (key === 'contact') {
       setCurrentView('contact');
       router.push('/?view=contact');
+    } else if (key === 'bancassurance') {
+      setCurrentView('bancassurance');
+      router.push('/?view=bancassurance');
+    } else if (key === 'knowledge') {
+      setCurrentView('knowledge');
+      router.push('/?view=knowledge');
+    } else if (key === 'settings') {
+      setCurrentView('settings');
+      router.push('/?view=settings');
     }
   };
 
@@ -2168,7 +2187,7 @@ ${customPrompt}`,
         <FaChevronRight size={8} className="group-hover:translate-x-0.5 transition-transform duration-200" />
       </button>
       {/* Tablet container with three-column layout */}
-      <div className="flex w-full max-w-[1600px] h-[90vh] rounded-3xl shadow-2xl bg-white/95 backdrop-blur-sm overflow-hidden border border-white/30">
+      <div className="flex w-full max-w-[2226px] h-[90vh] rounded-3xl shadow-2xl bg-white/95 backdrop-blur-sm overflow-hidden border border-white/30">
         
         {/* Column 1: Left Sidebar */}
         <aside className="w-72 bg-black border-r border-gray-800 flex flex-col shadow-lg">
@@ -2176,7 +2195,7 @@ ${customPrompt}`,
           <div className="p-6 border-b border-gray-800">
             <div className="flex items-center gap-3 mb-6">
               <div>
-                <h1 className="text-lg font-bold text-white">Enterprise AI Hub</h1>
+                <h1 className="text-lg font-bold text-white">FSI AI Hub</h1>
                 <p className="text-xs text-gray-400">Business Intelligence Platform</p>
               </div>
             </div>
@@ -2229,8 +2248,9 @@ ${customPrompt}`,
           </div>
         </aside>
 
-        {/* Column 2: Messages Section */}
-        <div className="w-96 bg-white border-r border-blue-200 flex flex-col shadow-lg">
+        {/* Column 2: Messages Section - Hidden in Bancassurance view */}
+        {currentView !== 'bancassurance' && (
+          <div className="w-96 bg-white border-r border-blue-200 flex flex-col shadow-lg">
           {/* Messages Header */}
           <div className="p-6 border-b border-blue-100">
             <div className="flex items-center justify-between mb-4">
@@ -2319,13 +2339,17 @@ ${customPrompt}`,
             ))}
           </div>
         </div>
+        )}
 
         {/* Column 3: Chat Area, Knowledge Base, or Settings */}
         <main className="flex-1 flex flex-col bg-white">
           {currentView === 'contact' ? (
             /* Contact Center Dashboard */
             <ContactCenterDashboard />
-          ) : selectedNav === 4 ? (
+          ) : currentView === 'bancassurance' ? (
+            /* Bancassurance Interface */
+            <BancassuranceInterface />
+          ) : currentView === 'knowledge' ? (
             /* Knowledge Base Panel */
             <div className="flex-1 p-6">
               <div className="max-w-4xl">
@@ -2497,7 +2521,7 @@ ${customPrompt}`,
                 </div>
               </div>
             </div>
-          ) : selectedNav === 5 ? (
+          ) : currentView === 'settings' ? (
             /* Settings Panel */
             <div className="flex-1 p-6">
               <div className="max-w-2xl">
@@ -2679,18 +2703,6 @@ ${customPrompt}`,
                         title="Start Voice Call"
                       >
                         <FaPhone size={14} className="text-green-600" />
-                      </button>
-                      
-                      <button
-                        className="w-9 h-9 rounded-full bg-white border-2 border-transparent bg-clip-padding flex items-center justify-center transition-all duration-200 hover:scale-105"
-                        style={{
-                          backgroundImage: 'linear-gradient(white, white), linear-gradient(45deg, #3b82f6, #6366f1)',
-                          backgroundOrigin: 'border-box',
-                          backgroundClip: 'padding-box, border-box'
-                        }}
-                        title="Start Video Call"
-                      >
-                        <FaVideo size={14} className="text-blue-600" />
                       </button>
                     </div>
                   </div>
