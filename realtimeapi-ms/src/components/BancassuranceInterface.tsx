@@ -318,24 +318,6 @@ export default function BancassuranceInterface() {
     }
   }, [selectedCustomer]);
 
-  // Update selected product when simulation parameters change
-  React.useEffect(() => {
-    if (selectedCustomer && simulationParams) {
-      // Create a temporary customer object with simulated parameters
-      const simulatedCustomer = {
-        ...selectedCustomer,
-        age: simulationParams.age,
-        income: simulationParams.income,
-        demographics: {
-          ...selectedCustomer.demographics,
-          dependents: simulationParams.dependents
-        }
-      };
-      
-      const highestProduct = getHighestScoringProduct(simulatedCustomer);
-      setSelectedProduct(highestProduct);
-    }
-  }, [simulationParams, selectedCustomer]);
 
   // Add slider styles
   React.useEffect(() => {
@@ -417,6 +399,26 @@ export default function BancassuranceInterface() {
     dependents: number;
     riskTolerance: number;
   } | null>(null);
+
+  // Update selected product when simulation parameters change
+  React.useEffect(() => {
+    if (selectedCustomer && simulationParams) {
+      // Create a temporary customer object with simulated parameters
+      const simulatedCustomer = {
+        ...selectedCustomer,
+        age: simulationParams.age,
+        income: simulationParams.income,
+        demographics: {
+          ...selectedCustomer.demographics,
+          dependents: simulationParams.dependents
+        }
+      };
+      
+      const highestProduct = getHighestScoringProduct(simulatedCustomer);
+      setSelectedProduct(highestProduct);
+    }
+  }, [simulationParams, selectedCustomer]);
+
   const [showSettings, setShowSettings] = useState(false);
   const [showDataSources, setShowDataSources] = useState(false);
   const [showMcpAgents, setShowMcpAgents] = useState(false);
