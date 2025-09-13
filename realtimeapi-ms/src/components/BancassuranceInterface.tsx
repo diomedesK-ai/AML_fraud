@@ -163,7 +163,7 @@ const MOCK_CUSTOMERS: Customer[] = [
     lastInteraction: '1 day ago',
     needs: { life: 80, health: 85, critical: 75, education: 70 },
     demographics: { maritalStatus: 'Married', dependents: 2, occupation: 'Financial Advisor' },
-    profile: { nationality: 'American', occupationRisk: 'Low', financialSophistication: 'Expert', lifeStage: 'Peak Earning' }
+    profile: { nationality: 'American', occupationRisk: 'Low', financialSophistication: 'Advanced', lifeStage: 'Peak Earning' }
   },
   {
     id: 'cust_007',
