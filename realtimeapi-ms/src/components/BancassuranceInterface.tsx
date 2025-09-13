@@ -241,7 +241,101 @@ export default function BancassuranceInterface() {
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
   const [isUnderwriting, setIsUnderwriting] = useState(false);
   const [underwritingResult, setUnderwritingResult] = useState<UnderwritingResult | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<'life' | 'health' | 'critical' | 'education'>('education');
+  
+  // Function to calculate the highest scoring product for a customer
+  const getHighestScoringProduct = (customer: Customer): 'life' | 'health' | 'critical' | 'education' => {
+    const getCriteriaForProduct = (productKey: string) => {
+      switch (productKey) {
+        case 'life':
+          return [
+            { label: 'Age under 60', met: customer.age < 60, weight: 15 },
+            { label: 'Has dependents', met: customer.demographics.dependents > 0, weight: 25 },
+            { label: 'Sufficient income', met: customer.income >= 75000, weight: 20 },
+            { label: 'Family building stage', met: customer.profile.lifeStage.includes('Family') || customer.profile.lifeStage.includes('Building'), weight: 10 },
+            { label: 'Premium customer', met: customer.segment === 'Premium', weight: 15 },
+            { label: 'Insurance segment match', met: customer.insuranceSegment === 'family_protector' || customer.insuranceSegment === 'health_conscious', weight: 15 }
+          ];
+        case 'health':
+          return [
+            { label: 'Age under 65', met: customer.age < 65, weight: 15 },
+            { label: 'High occupation risk', met: customer.profile.occupationRisk === 'High', weight: 10 },
+            { label: 'Sufficient income', met: customer.income >= 50000, weight: 20 },
+            { label: 'Health conscious', met: customer.insuranceSegment === 'health_conscious', weight: 15 },
+            { label: 'Premium customer', met: customer.segment === 'Premium', weight: 15 },
+            { label: 'Medical coverage gap', met: !customer.profile.lifeStage.includes('Retired'), weight: 25 }
+          ];
+        case 'critical':
+          return [
+            { label: 'Age 30-55', met: customer.age >= 30 && customer.age <= 55, weight: 20 },
+            { label: 'High income', met: customer.income >= 80000, weight: 15 },
+            { label: 'Family responsibilities', met: customer.demographics.dependents > 0, weight: 20 },
+            { label: 'Premium customer', met: customer.segment === 'Premium', weight: 15 },
+            { label: 'Risk awareness', met: customer.insuranceSegment === 'risk_averse' || customer.insuranceSegment === 'family_protector', weight: 15 },
+            { label: 'Professional occupation', met: customer.profile.occupationRisk === 'Low', weight: 15 }
+          ];
+        case 'education':
+          return [
+            { label: 'Has children', met: customer.demographics.dependents > 0, weight: 30 },
+            { label: 'Age under 50', met: customer.age < 50, weight: 15 },
+            { label: 'High income', met: customer.income >= 100000, weight: 20 },
+            { label: 'Family building stage', met: customer.profile.lifeStage.includes('Family') || customer.profile.lifeStage.includes('Building'), weight: 15 },
+            { label: 'Premium customer', met: customer.segment === 'Premium', weight: 10 },
+            { label: 'Long-term planner', met: customer.insuranceSegment === 'wealth_builder', weight: 10 }
+          ];
+        default:
+          return [];
+      }
+    };
+
+    const products = ['life', 'health', 'critical', 'education'] as const;
+    let highestScore = 0;
+    let highestProduct: 'life' | 'health' | 'critical' | 'education' = 'life';
+
+    products.forEach(product => {
+      const criteria = getCriteriaForProduct(product);
+      const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+      const metWeight = criteria.filter(c => c.met).reduce((sum, c) => sum + c.weight, 0);
+      const score = Math.round((metWeight / totalWeight) * 100);
+      
+      if (score > highestScore) {
+        highestScore = score;
+        highestProduct = product;
+      }
+    });
+
+    return highestProduct;
+  };
+
+  const [selectedProduct, setSelectedProduct] = useState<'life' | 'health' | 'critical' | 'education'>(() => 
+    selectedCustomer ? getHighestScoringProduct(selectedCustomer) : 'life'
+  );
+
+  // Update selected product when customer changes to automatically select highest scoring product
+  React.useEffect(() => {
+    if (selectedCustomer) {
+      const highestProduct = getHighestScoringProduct(selectedCustomer);
+      setSelectedProduct(highestProduct);
+    }
+  }, [selectedCustomer]);
+
+  // Update selected product when simulation parameters change
+  React.useEffect(() => {
+    if (selectedCustomer && simulationParams) {
+      // Create a temporary customer object with simulated parameters
+      const simulatedCustomer = {
+        ...selectedCustomer,
+        age: simulationParams.age,
+        income: simulationParams.income,
+        demographics: {
+          ...selectedCustomer.demographics,
+          dependents: simulationParams.dependents
+        }
+      };
+      
+      const highestProduct = getHighestScoringProduct(simulatedCustomer);
+      setSelectedProduct(highestProduct);
+    }
+  }, [simulationParams, selectedCustomer]);
 
   // Add slider styles
   React.useEffect(() => {
