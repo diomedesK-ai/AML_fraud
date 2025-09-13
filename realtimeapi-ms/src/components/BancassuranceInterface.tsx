@@ -832,17 +832,18 @@ Provide a JSON response with:
     
     setIsSendingCampaign(true);
     
+    // Get the primary recommended product
+    const primaryProduct = Object.entries(selectedCustomer.needs)
+      .reduce((max, [key, value]) => value > max.value ? {key, value} : max, {key: '', value: 0});
+    
+    const productNames = {
+      life: 'Life Insurance',
+      health: 'Health Insurance', 
+      critical: 'Critical Illness Coverage',
+      education: 'Education Savings Plan'
+    };
+    
     try {
-      // Get the primary recommended product
-      const primaryProduct = Object.entries(selectedCustomer.needs)
-        .reduce((max, [key, value]) => value > max.value ? {key, value} : max, {key: '', value: 0});
-      
-      const productNames = {
-        life: 'Life Insurance',
-        health: 'Health Insurance', 
-        critical: 'Critical Illness Coverage',
-        education: 'Education Savings Plan'
-      };
 
       // Generate personalized WhatsApp message using AI
       const response = await fetch('/api/chat', {
