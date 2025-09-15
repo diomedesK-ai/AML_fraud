@@ -8,6 +8,7 @@ import {
   FaNetworkWired,
   FaLock,
   FaUnlock,
+  FaExclamationCircle,
   FaEye,
   FaEyeSlash,
   FaSpinner,
@@ -53,11 +54,22 @@ interface SharingRequest {
   id: string;
   pattern: string;
   recipient: string;
-  status: 'Pending' | 'Active' | 'Completed' | 'Revoked';
+  status: 'Pending' | 'Active' | 'Completed' | 'Revoked' | 'Destroyed';
   dataFields: number;
   tokenizedFields: number;
   createdAt: Date;
-  expiresAt?: Date;
+  expiresAt?: Date | null;
+  dataSource?: string;
+  schema?: string;
+  drmPolicy?: string;
+  accessControl?: string;
+  description?: string;
+  sharedWith?: string;
+  contactEmail?: string;
+  acknowledged?: boolean;
+  acknowledgedAt?: Date | null;
+  downloadCount?: number;
+  lastAccessed?: Date | null;
 }
 
 const MOCK_DATA_FIELDS: DataField[] = [
@@ -74,9 +86,90 @@ const MOCK_DATA_FIELDS: DataField[] = [
 ];
 
 const MOCK_SHARING_REQUESTS: SharingRequest[] = [
-  { id: 'REQ_001', pattern: 'sharing', recipient: 'Prudential Insurance', status: 'Active', dataFields: 6, tokenizedFields: 4, createdAt: new Date(Date.now() - 86400000), expiresAt: new Date(Date.now() + 86400000 * 30) },
-  { id: 'REQ_002', pattern: 'distribution', recipient: 'Multiple Insurers', status: 'Pending', dataFields: 8, tokenizedFields: 8, createdAt: new Date(Date.now() - 3600000) },
-  { id: 'REQ_003', pattern: 'collaborative', recipient: 'Risk Analytics Consortium', status: 'Active', dataFields: 10, tokenizedFields: 10, createdAt: new Date(Date.now() - 172800000) },
+  { 
+    id: 'REQ_001', 
+    pattern: 'sharing', 
+    recipient: 'Prudential Insurance', 
+    status: 'Active', 
+    dataFields: 6, 
+    tokenizedFields: 4, 
+    createdAt: new Date(Date.now() - 86400000), 
+    expiresAt: new Date(Date.now() + 86400000 * 30),
+    dataSource: 'Customer Database',
+    schema: 'customers',
+    drmPolicy: 'DRM with Destruction',
+    accessControl: 'Token-Based',
+    description: 'Customer demographic data sharing for risk assessment and product recommendations',
+    sharedWith: 'Sarah Chen',
+    contactEmail: 'sarah.chen@prudential.com',
+    acknowledged: true,
+    acknowledgedAt: new Date(Date.now() - 82800000),
+    downloadCount: 12,
+    lastAccessed: new Date(Date.now() - 7200000)
+  },
+  { 
+    id: 'REQ_002', 
+    pattern: 'distribution', 
+    recipient: 'Multiple Insurers', 
+    status: 'Pending', 
+    dataFields: 8, 
+    tokenizedFields: 8, 
+    createdAt: new Date(Date.now() - 3600000),
+    expiresAt: new Date(Date.now() + 86400000 * 90),
+    dataSource: 'Risk Analytics Warehouse',
+    schema: 'risk_profiles',
+    drmPolicy: 'DRM with Grace Period',
+    accessControl: 'Role-Based',
+    description: 'Anonymized risk profiles for collaborative underwriting and market analysis',
+    sharedWith: 'Michael Torres',
+    contactEmail: 'michael.torres@insurers-alliance.com',
+    acknowledged: false,
+    acknowledgedAt: null,
+    downloadCount: 0,
+    lastAccessed: null
+  },
+  { 
+    id: 'REQ_003', 
+    pattern: 'collaborative', 
+    recipient: 'Risk Analytics Consortium', 
+    status: 'Destroyed', 
+    dataFields: 10, 
+    tokenizedFields: 10, 
+    createdAt: new Date(Date.now() - 15552000000), // 6 months ago
+    expiresAt: new Date(Date.now() - 86400000), // Expired yesterday
+    dataSource: 'Transaction Logs',
+    schema: 'aggregated_patterns',
+    drmPolicy: 'DRM with Destruction',
+    accessControl: 'Time-Limited',
+    description: 'Aggregated transaction patterns for industry-wide fraud detection and risk modeling (Auto-destroyed after expiry)',
+    sharedWith: 'Dr. Amanda Liu',
+    contactEmail: 'amanda.liu@risk-consortium.org',
+    acknowledged: true,
+    acknowledgedAt: new Date(Date.now() - 15465600000), // Acknowledged 6 months ago
+    downloadCount: 45,
+    lastAccessed: new Date(Date.now() - 172800000) // Last accessed 2 days ago (before destruction)
+  },
+  { 
+    id: 'REQ_004', 
+    pattern: 'distribution', 
+    recipient: 'MAS Regulatory Authority', 
+    status: 'Active', 
+    dataFields: 25, 
+    tokenizedFields: 20, 
+    createdAt: new Date(Date.now() - 259200000),
+    expiresAt: null,
+    dataSource: 'Risk Analytics Warehouse',
+    schema: 'compliance_metrics',
+    drmPolicy: 'DRM Only',
+    accessControl: 'Role-Based',
+    description: 'Regulatory compliance metrics and risk indicators for industry oversight and policy development',
+    sharedWith: 'Dr. Helen Ng',
+    contactEmail: 'helen.ng@mas.gov.sg',
+    acknowledged: true,
+    acknowledgedAt: new Date(Date.now() - 255600000),
+    downloadCount: 34,
+    lastAccessed: new Date(Date.now() - 1800000)
+  }
 ];
 
 const DATA_SOURCES = [
@@ -134,6 +227,11 @@ export default function ExternalDataSharingInterface() {
   const [recipientOrganization, setRecipientOrganization] = useState<string>('');
   const [shareName, setShareName] = useState<string>('');
   const [shareDescription, setShareDescription] = useState<string>('');
+  const [validityDate, setValidityDate] = useState<string>('');
+  const [dataDestructionEnabled, setDataDestructionEnabled] = useState<boolean>(true);
+  const [destructionPolicy, setDestructionPolicy] = useState<'immediate' | 'grace_period' | 'notification_only'>('immediate');
+  const [gracePeriodDays, setGracePeriodDays] = useState<number>(7);
+  const [permissionLevel, setPermissionLevel] = useState<'read_only' | 'read_write' | 'full_access'>('read_only');
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [shareCreated, setShareCreated] = useState(false);
 
@@ -156,8 +254,20 @@ Schema: ${selectedSchema}
 Tokenization: ${sharingConfig.tokenizationLevel}
 Access Control: ${sharingConfig.accessControl}
 
+🔐 DATA SOVEREIGNTY & DESTRUCTION POLICY:
+- Share Validity: ${validityDate ? `Valid until ${new Date(validityDate).toLocaleDateString()}` : 'No expiration set'}
+- Self-Destruction: ${dataDestructionEnabled ? 'ENABLED' : 'DISABLED'}
+- Destruction Policy: ${destructionPolicy === 'immediate' ? 'Immediate deletion on expiry' : 
+  destructionPolicy === 'grace_period' ? `${gracePeriodDays} day grace period` : 'Notification only'}
+
+⚠️ IMPORTANT: This data contains embedded sovereignty policies that MUST be preserved:
+- Data will self-destruct on ${validityDate ? new Date(validityDate).toLocaleDateString() : 'expiration'}
+- Any copies or derivatives MUST inherit these destruction policies
+- Violation of data sovereignty terms may result in legal action
+
 To access this data share, please click the secure link below:
 https://datashare.prudential.com/shares/${Date.now()}/access?token=${Math.random().toString(36).substring(2, 15)}
+Sovereignty Hash: SHA256-${Math.random().toString(36).substring(2, 15).toUpperCase()}
 
 This link expires in 7 days for security purposes.
 
@@ -182,6 +292,11 @@ Powered by PRUDENTIAL
     setRecipientOrganization('');
     setShareName('');
     setShareDescription('');
+    setValidityDate('');
+    setDataDestructionEnabled(true);
+    setDestructionPolicy('immediate');
+    setGracePeriodDays(7);
+    setPermissionLevel('read_only');
     setShareCreated(false);
     setSelectedFields([]);
   };
@@ -421,35 +536,91 @@ Requirements:
                 </button>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {sharingRequests.map((request) => (
-                  <div key={request.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${
-                        request.status === 'Active' ? 'bg-green-500' :
-                        request.status === 'Pending' ? 'bg-yellow-500' :
-                        request.status === 'Completed' ? 'bg-blue-500' : 'bg-red-500'
-                      }`}></div>
-                      <div>
-                        <div className="font-medium text-gray-900">{request.recipient}</div>
-                        <div className="text-sm text-gray-600">
-                          {request.dataFields} fields • {request.tokenizedFields} tokenized • {request.pattern}
+                  <div key={request.id} className="p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${
+                          request.status === 'Active' ? 'bg-green-500' :
+                          request.status === 'Pending' ? 'bg-yellow-500' :
+                          request.status === 'Completed' ? 'bg-blue-500' : 'bg-red-500'
+                        }`}></div>
+                        <div>
+                          <div className="font-medium text-gray-900">{request.recipient}</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            {request.description}
+                          </div>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                            <div>
+                              <span className="font-medium">Contact:</span> {request.sharedWith}
+                            </div>
+                            <div>
+                              <span className="font-medium">Email:</span> {request.contactEmail}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">Acknowledged:</span>
+                              {request.acknowledged ? (
+                                <span className="text-green-600 flex items-center gap-1">
+                                  ✓ Yes
+                                  {request.acknowledgedAt && (
+                                    <span className="text-gray-400">
+                                      ({request.acknowledgedAt.toLocaleDateString()})
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-red-600">✗ Pending</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          request.status === 'Active' ? 'bg-green-100 text-green-800' :
+                          request.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                          request.status === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {request.status}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Expires: {request.expiresAt ? request.expiresAt.toLocaleDateString() : 'Never'}
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        request.status === 'Active' ? 'bg-green-100 text-green-800' :
-                        request.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                        request.status === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {request.status}
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Data Source:</span>
+                        <div className="font-medium">{request.dataSource}</div>
                       </div>
-                      {request.expiresAt && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Expires: {request.expiresAt.toLocaleDateString()}
-                        </div>
-                      )}
+                      <div>
+                        <span className="text-gray-500">Schema:</span>
+                        <div className="font-medium">{request.schema}</div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Fields:</span>
+                        <div className="font-medium">{request.dataFields} total • {request.tokenizedFields} tokenized</div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">DRM Policy:</span>
+                        <div className="font-medium">{request.drmPolicy}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                      <div className="text-xs text-gray-500 flex items-center gap-4">
+                        <span>Created: {request.createdAt.toLocaleDateString()}</span>
+                        <span>Access: {request.accessControl}</span>
+                        <span>Downloads: {request.downloadCount || 0}</span>
+                        {request.lastAccessed && (
+                          <span>Last Access: {request.lastAccessed.toLocaleDateString()}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        ID: {request.id}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -565,28 +736,134 @@ Requirements:
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Tokenization Level</label>
-                      <select 
-                        value={sharingConfig.tokenizationLevel}
-                        onChange={(e) => setSharingConfig(prev => ({ ...prev, tokenizationLevel: e.target.value as any }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="None">No Tokenization - Raw Data</option>
-                        <option value="Partial">Partial Tokenization - PII Only</option>
-                        <option value="Full">Full Tokenization - All Sensitive Data</option>
-                      </select>
+                      <div className="relative">
+                        <select 
+                          value={sharingConfig.tokenizationLevel}
+                          onChange={(e) => setSharingConfig(prev => ({ ...prev, tokenizationLevel: e.target.value as any }))}
+                          className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none cursor-pointer shadow-sm hover:shadow-md"
+                        >
+                          <option value="None">No Tokenization - Raw Data</option>
+                          <option value="Partial">Partial Tokenization - PII Only</option>
+                          <option value="Full">Full Tokenization - All Sensitive Data</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Access Control</label>
-                      <select 
-                        value={sharingConfig.accessControl}
-                        onChange={(e) => setSharingConfig(prev => ({ ...prev, accessControl: e.target.value as any }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="Token-Based">Token-Based Access</option>
-                        <option value="Role-Based">Role-Based Access</option>
-                        <option value="Time-Limited">Time-Limited Access (7 days)</option>
-                      </select>
+                      <div className="relative">
+                        <select 
+                          value={sharingConfig.accessControl}
+                          onChange={(e) => setSharingConfig(prev => ({ ...prev, accessControl: e.target.value as any }))}
+                          className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none cursor-pointer shadow-sm hover:shadow-md"
+                        >
+                          <option value="Token-Based">Token-Based Access</option>
+                          <option value="Role-Based">Role-Based Access</option>
+                          <option value="Time-Limited">Time-Limited Access (7 days)</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Data Sovereignty & Destruction Section */}
+                  <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <h5 className="text-sm font-semibold text-red-600 mb-4 flex items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-red-600 bg-white rounded-full flex items-center justify-center">
+                        <span className="text-red-600 font-bold text-xs">!</span>
+                      </div>
+                      Data Sharing Policies
+                    </h5>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Share Validity Date</label>
+                        <input
+                          type="date"
+                          value={validityDate}
+                          onChange={(e) => setValidityDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md"
+                          placeholder="Select expiration date"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">DRM Policy</label>
+                        <div className="relative">
+                          <select 
+                            value={destructionPolicy}
+                            onChange={(e) => setDestructionPolicy(e.target.value as any)}
+                            disabled={!dataDestructionEnabled}
+                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none cursor-pointer shadow-sm hover:shadow-md disabled:bg-gray-50 disabled:cursor-not-allowed"
+                          >
+                            <option value="immediate">DRM with Destruction</option>
+                            <option value="grace_period">DRM with Grace Period</option>
+                            <option value="notification_only">DRM Only</option>
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Permission Level</label>
+                        <div className="relative">
+                          <select 
+                            value={permissionLevel}
+                            onChange={(e) => setPermissionLevel(e.target.value as any)}
+                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none cursor-pointer shadow-sm hover:shadow-md"
+                          >
+                            <option value="read_only">Read Only</option>
+                            <option value="read_write">Read & Write</option>
+                            <option value="full_access">Full Access</option>
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {destructionPolicy === 'grace_period' && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Grace Period (Days)</label>
+                        <input
+                          type="number"
+                          value={gracePeriodDays}
+                          onChange={(e) => setGracePeriodDays(parseInt(e.target.value) || 7)}
+                          min="1"
+                          max="30"
+                          className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                        />
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="dataDestruction"
+                        checked={dataDestructionEnabled}
+                        onChange={(e) => setDataDestructionEnabled(e.target.checked)}
+                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                      />
+                      <label htmlFor="dataDestruction" className="text-sm text-gray-700">
+                        Enable embedded sovereignty policies
+                      </label>
                     </div>
                   </div>
 
@@ -726,10 +1003,45 @@ Requirements:
                             <span className="ml-2 font-medium">{recipientOrganization}</span>
                           </div>
                           <div>
-                            <span className="text-gray-600">Email:</span>
-                            <span className="ml-2 font-medium">{recipientEmail}</span>
+                            <span className="text-gray-600">Validity Date:</span>
+                            <span className="ml-2 font-medium">{validityDate ? new Date(validityDate).toLocaleDateString() : 'No expiration'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Self-Destruction:</span>
+                            <span className={`ml-2 font-medium ${dataDestructionEnabled ? 'text-red-600' : 'text-gray-500'}`}>
+                              {dataDestructionEnabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">DRM Policy:</span>
+                            <span className="ml-2 font-medium">
+                              {destructionPolicy === 'immediate' ? 'DRM with Destruction' : 
+                               destructionPolicy === 'grace_period' ? `DRM with Grace Period (${gracePeriodDays} days)` : 'DRM Only'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Permission Level:</span>
+                            <span className="ml-2 font-medium">
+                              {permissionLevel === 'read_only' ? 'Read Only' :
+                               permissionLevel === 'read_write' ? 'Read & Write' : 'Full Access'}
+                            </span>
                           </div>
                         </div>
+                        
+                        {dataDestructionEnabled && validityDate && (
+                          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="flex items-center gap-2 text-red-800 text-sm font-medium mb-2">
+                              <div className="w-4 h-4 border-2 border-red-600 bg-white rounded-full flex items-center justify-center">
+                                <span className="text-red-600 font-bold text-xs">!</span>
+                              </div>
+                              Data Sovereignty Active
+                            </div>
+                            <div className="text-xs text-red-600">
+                              This data share includes embedded sovereignty policies. The data will self-destruct on{' '}
+                              <strong>{new Date(validityDate).toLocaleDateString()}</strong> and any copies must inherit these policies.
+                            </div>
+                          </div>
+                        )}
                         {shareDescription && (
                           <div className="mt-4">
                             <span className="text-gray-600">Description:</span>
@@ -785,6 +1097,7 @@ Requirements:
                       currentStep === 5 ||
                       (currentStep === 1 && !selectedDataSource) ||
                       (currentStep === 2 && !selectedSchema) ||
+                      (currentStep === 3 && dataDestructionEnabled && !validityDate) ||
                       (currentStep === 4 && (!recipientEmail || !recipientOrganization || !shareName))
                     }
                     className="px-4 py-2 bg-blue-50 text-blue-700 rounded-full border-2 border-transparent bg-clip-padding hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 relative"

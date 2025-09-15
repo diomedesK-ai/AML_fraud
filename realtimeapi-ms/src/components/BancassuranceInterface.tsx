@@ -468,7 +468,7 @@ export default function BancassuranceInterface() {
         dependents: { min: 2, max: 5 },
         riskTolerance: { min: 3, max: 7 },
         segment: ['Premium', 'Standard'],
-        occupation: ['Manager', 'Engineer', 'Doctor', 'Banker']
+        occupation: ['Manager', 'Engineer', 'Doctor', 'Banker', 'Software Engineer', 'Investment Banker', 'Marketing Manager']
       },
       color: '#3b82f6',
       priority: 1
@@ -498,10 +498,25 @@ export default function BancassuranceInterface() {
         dependents: { min: 1, max: 4 },
         riskTolerance: { min: 4, max: 8 },
         segment: ['Premium', 'Standard'],
-        occupation: ['Professional', 'Manager', 'Specialist']
+        occupation: ['Professional', 'Manager', 'Specialist', 'Teacher', 'Analyst', 'Consultant']
       },
       color: '#f59e0b',
       priority: 3
+    },
+    {
+      id: 'emerging_customer',
+      name: 'Emerging Customer',
+      description: 'Young professionals and entry-level customers building their financial foundation',
+      criteria: {
+        ageRange: { min: 18, max: 35 },
+        salaryRange: { min: 30000, max: 80000 },
+        dependents: { min: 0, max: 2 },
+        riskTolerance: { min: 1, max: 6 },
+        segment: ['Basic', 'Standard'],
+        occupation: ['Analyst', 'Coordinator', 'Assistant', 'Specialist', 'Executive', 'Officer']
+      },
+      color: '#8b5cf6',
+      priority: 4
     }
   ]);
   const [showSegmentSettings, setShowSegmentSettings] = useState(false);
@@ -695,25 +710,41 @@ export default function BancassuranceInterface() {
 
   // Function to manually assign segment to customer
   const handleAssignSegment = (customerId: string) => {
+    console.log(`🔄 Starting assignment for customer ID: ${customerId}`);
     const customer = customers.find(c => c.id === customerId);
-    if (!customer) return;
+    if (!customer) {
+      console.log(`❌ Customer not found: ${customerId}`);
+      return;
+    }
+    
+    console.log(`👤 Found customer: ${customer.name}`, {
+      currentSegment: customer.insuranceSegment,
+      age: customer.age,
+      income: customer.income,
+      segment: customer.segment,
+      occupation: customer.demographics.occupation
+    });
     
     const assignedSegment = assignCustomerSegment(customer);
     
-    const updatedCustomers = customers.map(c => {
-      if (c.id === customerId) {
-        return { ...c, insuranceSegment: assignedSegment };
-      }
-      return c;
-    });
-    setCustomers(updatedCustomers);
+    setCustomers(prevCustomers => 
+      prevCustomers.map(c => {
+        if (c.id === customerId) {
+          console.log(`🔄 Updating ${c.name} with segment: ${assignedSegment}`);
+          return { ...c, insuranceSegment: assignedSegment };
+        }
+        return c;
+      })
+    );
     
     // Provide feedback
     if (assignedSegment) {
       const segment = insuranceSegments.find(s => s.id === assignedSegment);
       console.log(`✅ ${customer.name} assigned to ${segment?.name} segment`);
+      alert(`✅ ${customer.name} assigned to ${segment?.name} segment`);
     } else {
       console.log(`⚠️ ${customer.name} doesn't match any segment criteria`);
+      alert(`⚠️ ${customer.name} doesn't match any segment criteria`);
     }
   };
 
@@ -727,7 +758,10 @@ export default function BancassuranceInterface() {
       const salaryMatch = customer.income >= criteria.salaryRange.min && customer.income <= criteria.salaryRange.max;
       const dependentsMatch = customer.demographics.dependents >= criteria.dependents.min && customer.demographics.dependents <= criteria.dependents.max;
       const segmentMatch = criteria.segment.includes(customer.segment);
-      const occupationMatch = criteria.occupation.some(occ => customer.demographics.occupation.toLowerCase().includes(occ.toLowerCase()));
+      const occupationMatch = criteria.occupation.some(occ => 
+        customer.demographics.occupation.toLowerCase().includes(occ.toLowerCase()) ||
+        occ.toLowerCase().includes(customer.demographics.occupation.toLowerCase())
+      );
       
       if (ageMatch && salaryMatch && dependentsMatch && segmentMatch && occupationMatch) {
         return segment.id;
@@ -1611,11 +1645,31 @@ If asked about specific recommendations or underwriting for the current customer
             <div className="flex items-center gap-4 ml-4">
               <button
                 onClick={() => {
-                  customers.forEach(customer => {
-                    if (!customer.insuranceSegment) {
-                      handleAssignSegment(customer.id);
-                    }
-                  });
+                  console.log(`🔄 Starting bulk assignment...`);
+                  const customersToUpdate = customers.filter(c => !c.insuranceSegment);
+                  console.log(`📊 Found ${customersToUpdate.length} customers without segments:`, customersToUpdate.map(c => c.name));
+                  
+                  let successCount = 0;
+                  
+                  setCustomers(prevCustomers => 
+                    prevCustomers.map(customer => {
+                      if (!customer.insuranceSegment) {
+                        const assignedSegment = assignCustomerSegment(customer);
+                        if (assignedSegment) {
+                          successCount++;
+                          console.log(`✅ ${customer.name} assigned to segment: ${assignedSegment}`);
+                        } else {
+                          console.log(`❌ ${customer.name} could not be assigned`);
+                        }
+                        return { ...customer, insuranceSegment: assignedSegment };
+                      }
+                      return customer;
+                    })
+                  );
+                  
+                  // Provide feedback
+                  console.log(`✅ Bulk assignment complete: ${successCount}/${customersToUpdate.length} customers assigned`);
+                  alert(`✅ Bulk assignment complete: ${successCount}/${customersToUpdate.length} customers assigned`);
                 }}
                 className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                 title="Assign segments to all unassigned customers"
@@ -1684,7 +1738,7 @@ If asked about specific recommendations or underwriting for the current customer
                             className="w-2 h-2 rounded-full" 
                             style={{ backgroundColor: segment.color }}
                           ></div>
-                          <span className="text-xs text-gray-700 font-medium">{segment.name}</span>
+                          <span className="text-sm text-gray-700 font-medium">{segment.name}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
@@ -3496,7 +3550,7 @@ If asked about specific recommendations or underwriting for the current customer
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {['Underwriting Manual v3.2', 'MAS Regulatory Guidelines', 'Product Catalog 2024', 'Risk Assessment Matrix'].map((source) => (
+                    {['Underwriting Manual v3.2', 'MAS Regulatory Guidelines', 'Internal Policy Compliance', 'Product Catalog 2024', 'Risk Assessment Matrix'].map((source) => (
                       <label key={source} className="flex items-center gap-2">
                         <input type="checkbox" defaultChecked className="rounded" />
                         <span className="text-sm text-gray-700">{source}</span>
@@ -3873,6 +3927,7 @@ If asked about specific recommendations or underwriting for the current customer
                     {[
                       { name: 'Underwriting Manual v3.2', status: 'active', lastSync: '2 hours ago', size: '45.2 MB' },
                       { name: 'MAS Regulatory Guidelines', status: 'active', lastSync: '1 day ago', size: '12.8 MB' },
+                      { name: 'Internal Policy Compliance', status: 'active', lastSync: '30 minutes ago', size: '18.4 MB' },
                       { name: 'Product Catalog 2024', status: 'active', lastSync: '3 hours ago', size: '28.5 MB' },
                       { name: 'Risk Assessment Matrix', status: 'active', lastSync: '5 hours ago', size: '8.2 MB' },
                       { name: 'Claims Database Archive', status: 'inactive', lastSync: '1 week ago', size: '156.3 MB' },
