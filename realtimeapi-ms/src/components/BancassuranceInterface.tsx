@@ -755,7 +755,7 @@ export default function BancassuranceInterface() {
     for (const segment of insuranceSegments.sort((a, b) => a.priority - b.priority)) {
       const { criteria } = segment;
       let score = 0;
-      let totalCriteria = 5; // age, salary, dependents, segment, occupation
+      const totalCriteria = 5; // age, salary, dependents, segment, occupation
       
       // Check all criteria and calculate score
       const ageMatch = customer.age >= criteria.ageRange.min && customer.age <= criteria.ageRange.max;
