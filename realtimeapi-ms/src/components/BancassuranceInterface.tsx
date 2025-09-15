@@ -3064,17 +3064,17 @@ If asked about specific recommendations or underwriting for the current customer
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Max Tokens</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" defaultValue="1000">
                       <option value="500">500 tokens</option>
-                      <option value="1000" selected>1000 tokens</option>
+                      <option value="1000">1000 tokens</option>
                       <option value="2000">2000 tokens</option>
                     </select>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">RAG Grounding</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                      <option value="strict" selected>Strict - Always cite sources</option>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" defaultValue="strict">
+                      <option value="strict">Strict - Always cite sources</option>
                       <option value="moderate">Moderate - Cite when relevant</option>
                       <option value="flexible">Flexible - Minimal citations</option>
                     </select>
@@ -3129,17 +3129,17 @@ If asked about specific recommendations or underwriting for the current customer
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Max Tokens</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" defaultValue="1000">
                       <option value="500">500 tokens</option>
-                      <option value="1000" selected>1000 tokens</option>
+                      <option value="1000">1000 tokens</option>
                       <option value="2000">2000 tokens</option>
                     </select>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Customer Data Access</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                      <option value="full" selected>Full Profile Access</option>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" defaultValue="full">
+                      <option value="full">Full Profile Access</option>
                       <option value="limited">Limited - Basic Info Only</option>
                       <option value="anonymized">Anonymized Data</option>
                     </select>
@@ -3205,8 +3205,8 @@ If asked about specific recommendations or underwriting for the current customer
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Agent Pool Size</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                      <option value="2" selected>2 agents</option>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" defaultValue="2">
+                      <option value="2">2 agents</option>
                       <option value="5">5 agents</option>
                       <option value="10">10 agents</option>
                     </select>
