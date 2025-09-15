@@ -24,12 +24,14 @@ import {
   FaChevronRight,
   FaUndo,
   FaGlobe,
-  FaUniversity
+  FaUniversity,
+  FaShieldAlt
 } from 'react-icons/fa';
 import ContactCenterDashboard from '@/components/ContactCenterDashboard';
 import ExperienceSelector from '@/components/ExperienceSelector';
 import WealthAdvisorInterface from '@/components/WealthAdvisorInterface';
 import BancassuranceInterface from '@/components/BancassuranceInterface';
+import ExternalDataSharingInterface from '@/components/ExternalDataSharingInterface';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { getWealthAdvisorPrompt } from '@/utils/wealthAdvisorScenarios';
 
@@ -54,6 +56,7 @@ const NAV_ITEMS = [
   { icon: <FaRegComments size={20} />, label: 'Wealth Management', key: 'wealth', active: true },
   { icon: <FaPhone size={20} />, label: 'Contact Center', key: 'contact', active: false },
   { icon: <FaUniversity size={20} />, label: 'Bancassurance', key: 'bancassurance', active: false },
+  { icon: <FaShieldAlt size={20} />, label: 'Data Sharing', key: 'datasharing', active: false },
   { icon: <FaBell size={20} />, label: 'Alerts & Notifications', key: 'alerts', active: false },
   { icon: <FaArchive size={20} />, label: 'Knowledge Base', key: 'knowledge', active: false },
   { icon: <FaCog size={20} />, label: 'Global Settings', key: 'settings', active: false },
@@ -190,7 +193,7 @@ function HomeContent() {
   // URL routing for navigation
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'knowledge' | 'settings'>('wealth');
+  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'datasharing' | 'knowledge' | 'settings'>('wealth');
 
   // Handle URL-based navigation
   useEffect(() => {
@@ -201,12 +204,15 @@ function HomeContent() {
     } else if (view === 'bancassurance') {
       setCurrentView('bancassurance');
       setSelectedNav(2); // Bancassurance nav item
+    } else if (view === 'datasharing') {
+      setCurrentView('datasharing');
+      setSelectedNav(3); // Data Sharing nav item
     } else if (view === 'knowledge') {
       setCurrentView('knowledge');
-      setSelectedNav(4); // Knowledge Base nav item
+      setSelectedNav(5); // Knowledge Base nav item
     } else if (view === 'settings') {
       setCurrentView('settings');
-      setSelectedNav(5); // Settings nav item
+      setSelectedNav(6); // Settings nav item
     } else {
       setCurrentView('wealth');
       setSelectedNav(0); // Wealth Management nav item
@@ -225,6 +231,9 @@ function HomeContent() {
     } else if (key === 'bancassurance') {
       setCurrentView('bancassurance');
       router.push('/?view=bancassurance');
+    } else if (key === 'datasharing') {
+      setCurrentView('datasharing');
+      router.push('/?view=datasharing');
     } else if (key === 'knowledge') {
       setCurrentView('knowledge');
       router.push('/?view=knowledge');
@@ -2249,8 +2258,8 @@ ${customPrompt}`,
           </div>
         </aside>
 
-        {/* Column 2: Messages Section - Hidden in Bancassurance view */}
-        {currentView !== 'bancassurance' && (
+        {/* Column 2: Messages Section - Hidden in Bancassurance and Data Sharing views */}
+        {currentView !== 'bancassurance' && currentView !== 'datasharing' && (
           <div className="w-96 bg-white border-r border-blue-200 flex flex-col shadow-lg">
           {/* Messages Header */}
           <div className="p-6 border-b border-blue-100">
@@ -2350,6 +2359,9 @@ ${customPrompt}`,
           ) : currentView === 'bancassurance' ? (
             /* Bancassurance Interface */
             <BancassuranceInterface />
+          ) : currentView === 'datasharing' ? (
+            /* External Data Sharing Interface */
+            <ExternalDataSharingInterface />
           ) : currentView === 'knowledge' ? (
             /* Knowledge Base Panel */
             <div className="flex-1 p-6">
