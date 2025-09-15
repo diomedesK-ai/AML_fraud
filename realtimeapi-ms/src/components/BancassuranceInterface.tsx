@@ -468,7 +468,7 @@ export default function BancassuranceInterface() {
         dependents: { min: 2, max: 5 },
         riskTolerance: { min: 3, max: 7 },
         segment: ['Premium', 'Standard'],
-        occupation: ['Manager', 'Engineer', 'Doctor', 'Banker', 'Software Engineer', 'Investment Banker', 'Marketing Manager']
+        occupation: ['Manager', 'Engineer', 'Doctor', 'Banker', 'Software Engineer', 'Investment Banker', 'Marketing Manager', 'Architect', 'Lawyer', 'Director', 'VP', 'Senior Manager']
       },
       color: '#3b82f6',
       priority: 1
@@ -498,7 +498,7 @@ export default function BancassuranceInterface() {
         dependents: { min: 1, max: 4 },
         riskTolerance: { min: 4, max: 8 },
         segment: ['Premium', 'Standard'],
-        occupation: ['Professional', 'Manager', 'Specialist', 'Teacher', 'Analyst', 'Consultant']
+        occupation: ['Professional', 'Manager', 'Specialist', 'Teacher', 'Analyst', 'Consultant', 'Architect', 'Nurse', 'Therapist', 'Accountant', 'Auditor', 'Project Manager']
       },
       color: '#f59e0b',
       priority: 3
@@ -513,7 +513,7 @@ export default function BancassuranceInterface() {
         dependents: { min: 0, max: 2 },
         riskTolerance: { min: 1, max: 6 },
         segment: ['Basic', 'Standard'],
-        occupation: ['Analyst', 'Coordinator', 'Assistant', 'Specialist', 'Executive', 'Officer']
+        occupation: ['Analyst', 'Coordinator', 'Assistant', 'Specialist', 'Executive', 'Officer', 'Administrator', 'Associate', 'Representative', 'Advisor', 'Clerk', 'Supervisor']
       },
       color: '#8b5cf6',
       priority: 4
@@ -750,23 +750,58 @@ export default function BancassuranceInterface() {
 
   // Function to assign customer to insurance segment
   const assignCustomerSegment = (customer: Customer): string | undefined => {
+    let bestMatch: { segmentId: string; score: number } | null = null;
+    
     for (const segment of insuranceSegments.sort((a, b) => a.priority - b.priority)) {
       const { criteria } = segment;
+      let score = 0;
+      let totalCriteria = 5; // age, salary, dependents, segment, occupation
       
-      // Check all criteria
+      // Check all criteria and calculate score
       const ageMatch = customer.age >= criteria.ageRange.min && customer.age <= criteria.ageRange.max;
+      if (ageMatch) score++;
+      
       const salaryMatch = customer.income >= criteria.salaryRange.min && customer.income <= criteria.salaryRange.max;
+      if (salaryMatch) score++;
+      
       const dependentsMatch = customer.demographics.dependents >= criteria.dependents.min && customer.demographics.dependents <= criteria.dependents.max;
+      if (dependentsMatch) score++;
+      
       const segmentMatch = criteria.segment.includes(customer.segment);
+      if (segmentMatch) score++;
+      
       const occupationMatch = criteria.occupation.some(occ => 
         customer.demographics.occupation.toLowerCase().includes(occ.toLowerCase()) ||
         occ.toLowerCase().includes(customer.demographics.occupation.toLowerCase())
       );
+      if (occupationMatch) score++;
       
-      if (ageMatch && salaryMatch && dependentsMatch && segmentMatch && occupationMatch) {
+      console.log(`🔍 Segment "${segment.name}" for ${customer.name}:`, {
+        age: `${customer.age} (${criteria.ageRange.min}-${criteria.ageRange.max}) = ${ageMatch}`,
+        salary: `$${customer.income} ($${criteria.salaryRange.min}-$${criteria.salaryRange.max}) = ${salaryMatch}`,
+        dependents: `${customer.demographics.dependents} (${criteria.dependents.min}-${criteria.dependents.max}) = ${dependentsMatch}`,
+        segment: `${customer.segment} in [${criteria.segment.join(', ')}] = ${segmentMatch}`,
+        occupation: `${customer.demographics.occupation} matches = ${occupationMatch}`,
+        score: `${score}/${totalCriteria}`
+      });
+      
+      // Accept if at least 4 out of 5 criteria match (80% match)
+      if (score >= 4) {
         return segment.id;
       }
+      
+      // Track best partial match
+      if (!bestMatch || score > bestMatch.score) {
+        bestMatch = { segmentId: segment.id, score };
+      }
     }
+    
+    // If no segment meets 80% criteria, assign the best partial match if it's at least 60% (3/5)
+    if (bestMatch && bestMatch.score >= 3) {
+      console.log(`⚠️ Assigning ${customer.name} to best partial match with score ${bestMatch.score}/5`);
+      return bestMatch.segmentId;
+    }
+    
     return undefined;
   };
 
