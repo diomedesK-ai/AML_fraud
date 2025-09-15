@@ -87,3 +87,6 @@ Web search should now work properly and return actual search results instead of 
 
 ## 🔍 **If Still Having Issues**
 Check browser console for the new debug logs to see exactly where the content flow breaks down.
+
+
+

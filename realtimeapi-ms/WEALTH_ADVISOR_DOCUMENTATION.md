@@ -171,3 +171,4 @@ Charitable: Donor-advised funds, charitable remainder trusts
 - **Multi-language support for international clients**
 
 This implementation provides a sophisticated foundation for private banking conversations while maintaining the flexibility to expand into additional wealth management capabilities.
+

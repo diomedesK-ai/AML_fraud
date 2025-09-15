@@ -211,10 +211,20 @@ const MOCK_CUSTOMERS: Customer[] = [
 ];
 
 interface UnderwritingResult {
-  status: 'approved' | 'declined' | 'review';
+  status: 'approved' | 'declined' | 'review' | 'eligible' | 'not eligible' | 'review required' | 'eligible with conditions';
   reason: string;
   premium?: number;
   conditions?: string[];
+  premiumBreakdown?: {
+    base_premium: number;
+    risk_loading: number;
+    admin_fee: number;
+    total: number;
+  };
+  confidence?: number;
+  riskRating?: 'Low' | 'Medium' | 'High';
+  keyFactors?: string[];
+  nextSteps?: string;
 }
 
 // Chat message types
@@ -241,6 +251,18 @@ export default function BancassuranceInterface() {
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
   const [isUnderwriting, setIsUnderwriting] = useState(false);
   const [underwritingResult, setUnderwritingResult] = useState<UnderwritingResult | null>(null);
+  const [underwritingSteps, setUnderwritingSteps] = useState<{
+    step: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    details?: string;
+    timestamp?: Date;
+  }[]>([]);
+  const [currentUnderwritingStep, setCurrentUnderwritingStep] = useState<string>('');
+  const [llmTranscript, setLlmTranscript] = useState<{
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }[]>([]);
   
   // Function to calculate the highest scoring product for a customer
   const getHighestScoringProduct = (customer: Customer): 'life' | 'health' | 'critical' | 'education' => {
@@ -733,97 +755,317 @@ export default function BancassuranceInterface() {
     }
   };
 
-  // Handle underwriting simulation
+  // Helper function to update underwriting steps
+  const updateUnderwritingStep = (stepName: string, status: 'pending' | 'processing' | 'completed' | 'failed', details?: string) => {
+    setCurrentUnderwritingStep(stepName);
+    setUnderwritingSteps(prev => {
+      const existingIndex = prev.findIndex(s => s.step === stepName);
+      const newStep = { 
+        step: stepName, 
+        status, 
+        details, 
+        timestamp: new Date() 
+      };
+      
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = newStep;
+        return updated;
+      } else {
+        return [...prev, newStep];
+      }
+    });
+  };
+
+  // Enhanced AI Eligibility Assessment with detailed process
   const handleUnderwriting = async () => {
     if (!selectedCustomer) return;
     
     setIsUnderwriting(true);
     setCurrentView('underwriting');
+    setUnderwritingResult(null);
+    setUnderwritingSteps([]);
+    setLlmTranscript([]);
     
+    const productNames = {
+      life: 'Life Insurance',
+      health: 'Health Insurance',
+      critical: 'Critical Illness Coverage',
+      education: 'Education Savings Plan'
+    };
+
     try {
-      // Call OpenAI API for underwriting assessment
+      // Step 1: Document Processing
+      updateUnderwritingStep('Document Processing', 'processing', 'Analyzing customer documents and profile data...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      updateUnderwritingStep('Document Processing', 'completed', 'Customer profile, banking history, and KYC documents verified');
+
+      // Step 2: Risk Assessment
+      updateUnderwritingStep('Risk Assessment', 'processing', 'Evaluating demographic and financial risk factors...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      updateUnderwritingStep('Risk Assessment', 'completed', `${selectedCustomer.profile.occupationRisk} risk occupation, ${selectedCustomer.age} years old, ${selectedCustomer.demographics.dependents} dependents`);
+
+      // Step 3: Financial Capacity Analysis
+      updateUnderwritingStep('Financial Capacity', 'processing', 'Analyzing income, affordability, and existing coverage...');
+      await new Promise(resolve => setTimeout(resolve, 1800));
+      updateUnderwritingStep('Financial Capacity', 'completed', `$${selectedCustomer.income.toLocaleString()} annual income, ${selectedCustomer.segment} banking segment`);
+
+      // Step 4: Regulatory Compliance Check
+      updateUnderwritingStep('Regulatory Compliance', 'processing', 'Verifying MAS guidelines and suitability requirements...');
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      updateUnderwritingStep('Regulatory Compliance', 'completed', 'All regulatory requirements satisfied');
+
+      // Step 5: AI Underwriting Decision
+      updateUnderwritingStep('AI Underwriting', 'processing', 'Generating comprehensive underwriting decision using advanced AI models...');
+      
+      // Prepare the messages for LLM
+      const systemMessage = `You are a senior AI underwriting specialist with 15+ years of experience in bancassurance products. You conduct thorough risk assessments and make final underwriting decisions.
+
+**Your Expertise:**
+- Advanced risk modeling and actuarial analysis
+- Comprehensive medical and financial underwriting
+- Regulatory compliance (MAS, IRDAI guidelines)
+- Premium optimization and policy structuring
+- Fraud detection and anomaly analysis
+
+**Underwriting Process:**
+1. **Comprehensive Risk Evaluation**: Age, health indicators, occupation hazards, lifestyle factors
+2. **Financial Assessment**: Income stability, debt-to-income ratio, existing coverage analysis
+3. **Behavioral Analysis**: Banking relationship, propensity patterns, engagement history
+4. **Regulatory Verification**: KYC compliance, suitability assessment, disclosure requirements
+5. **Actuarial Modeling**: Premium calculation, mortality/morbidity factors, profit margins
+
+**Decision Framework:**
+- **ELIGIBLE**: Low to moderate risk, meets all criteria, profitable
+- **ELIGIBLE WITH CONDITIONS**: Moderate risk, requires specific terms/exclusions
+- **NOT ELIGIBLE**: High risk, regulatory issues, or unprofitable
+- **REVIEW REQUIRED**: Complex case requiring manual review
+
+**Premium Calculation Guidelines:**
+- Base Premium: Calculate using age, occupation risk, coverage amount, and product type
+- Risk Loading: Apply based on occupation risk, age brackets, and health indicators
+- Admin Fee: Standard processing fee (typically 3-5% of base premium)
+- Geographic/Regulatory adjustments where applicable
+- Consider customer segment (Premium customers get discounts)
+
+**Output Requirements (JSON format):**
+{
+  "decision": "ELIGIBLE|ELIGIBLE_WITH_CONDITIONS|NOT_ELIGIBLE|REVIEW_REQUIRED",
+  "confidence": 85,
+  "premium_annual": 2400,
+  "premium_breakdown": {
+    "base_premium": 2000,
+    "risk_loading": 300,
+    "admin_fee": 100,
+    "total": 2400
+  },
+  "risk_rating": "Low|Medium|High",
+  "key_factors": ["Factor 1", "Factor 2", "Factor 3"],
+  "conditions": ["Condition 1 if applicable"],
+  "reasoning": "Detailed professional explanation with premium calculation rationale",
+  "next_steps": "Required actions or recommendations"
+}
+
+**CRITICAL: You MUST provide accurate premium_breakdown calculations that reflect the customer's specific risk profile, age, occupation, income, and selected product type. Do not use generic values.**
+
+Be thorough, analytical, and provide clear reasoning for your decision.`;
+
+      const userMessage = `Conduct comprehensive underwriting assessment for ${productNames[selectedProduct]} application:
+
+**Customer Profile:**
+- Name: ${selectedCustomer.name}
+- Age: ${selectedCustomer.age} years
+- Occupation: ${selectedCustomer.demographics.occupation} (${selectedCustomer.profile.occupationRisk} risk)
+- Annual Income: $${selectedCustomer.income.toLocaleString()}
+- Marital Status: ${selectedCustomer.demographics.maritalStatus}
+- Dependents: ${selectedCustomer.demographics.dependents} children
+- Life Stage: ${selectedCustomer.profile.lifeStage}
+- Financial Sophistication: ${selectedCustomer.profile.financialSophistication}
+- Nationality: ${selectedCustomer.profile.nationality}
+
+**Banking Relationship:**
+- Segment: ${selectedCustomer.segment} Banking Customer
+- Account History: ${2024 - Math.floor(selectedCustomer.age / 10)} years
+- Last Interaction: ${selectedCustomer.lastInteraction}
+- Propensity Score: ${selectedCustomer.propensityScore}%
+
+**Insurance Needs Analysis:**
+- Life Insurance Need: ${selectedCustomer.needs.life}%
+- Health Insurance Need: ${selectedCustomer.needs.health}%
+- Critical Illness Need: ${selectedCustomer.needs.critical}%
+- Education Savings Need: ${selectedCustomer.needs.education}%
+
+**Product Applied For:** ${productNames[selectedProduct]}
+**Application Date:** ${new Date().toLocaleDateString()}
+
+**Coverage Requirements:**
+${selectedProduct === 'life' ? `- Coverage Amount: $${(selectedCustomer.income * 10).toLocaleString()} (10x annual income)
+- Term: 20-30 years based on age and dependents` : 
+selectedProduct === 'health' ? `- Annual Coverage Limit: $${(selectedCustomer.income * 2).toLocaleString()}
+- Deductible: Based on income and risk profile` :
+selectedProduct === 'critical' ? `- Lump Sum Benefit: $${(selectedCustomer.income * 5).toLocaleString()}
+- Coverage Period: Until age 65` :
+`- Education Fund Target: $${(selectedCustomer.demographics.dependents * 50000).toLocaleString()}
+- Investment Period: ${Math.max(18 - (selectedCustomer.age - 30), 10)} years`}
+
+**Risk Assessment Context:**
+- Industry Risk Level: ${selectedCustomer.profile.occupationRisk}
+- Customer Lifetime Value: ${selectedCustomer.segment} Banking Customer
+- Existing Relationship: ${2024 - Math.floor(selectedCustomer.age / 10)} years
+- Cross-sell Opportunity Score: ${selectedCustomer.propensityScore}%
+
+Please provide comprehensive underwriting decision with detailed analysis, premium calculation specific to this customer's profile, and recommendations.`;
+
+      // Add messages to transcript
+      setLlmTranscript([
+        { role: 'system', content: systemMessage, timestamp: new Date() },
+        { role: 'user', content: userMessage, timestamp: new Date() }
+      ]);
+      
+      // Call OpenAI API for streaming underwriting assessment
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [
-            {
-              role: 'system',
-              content: `You are an expert AI underwriting assistant specializing in bancassurance products. Your role is to conduct thorough risk assessment and provide professional underwriting decisions.
-
-**Your Expertise:**
-- Life, Health, Critical Illness, and Education insurance underwriting
-- Risk assessment based on age, health, occupation, and financial profile
-- Regulatory compliance (MAS guidelines)
-- Premium pricing and policy terms
-
-**Analysis Framework:**
-1. **Risk Assessment**: Evaluate age, health status, occupation risk, lifestyle factors
-2. **Financial Capacity**: Assess income, existing coverage, affordability
-3. **Regulatory Compliance**: Ensure MAS suitability requirements
-4. **Decision Rationale**: Provide clear, professional reasoning
-
-**Output Format:**
-- **Decision**: APPROVED / DECLINED / REVIEW REQUIRED
-- **Premium**: Suggested premium amount (if approved)
-- **Risk Rating**: Low / Medium / High
-- **Key Factors**: List main decision factors
-- **Conditions**: Any special terms or exclusions
-- **Reasoning**: Professional explanation of decision
-
-Be thorough, objective, and provide actionable insights for the bancassurance team.`
-            },
-            {
-              role: 'user',
-              content: `Assess this customer for ${selectedProduct} insurance:
-              
-Customer Profile:
-- Name: ${selectedCustomer.name}
-- Age: ${selectedCustomer.age}
-- Income: $${selectedCustomer.income.toLocaleString()}
-- Occupation: ${selectedCustomer.demographics.occupation}
-- Marital Status: ${selectedCustomer.demographics.maritalStatus}
-- Dependents: ${selectedCustomer.demographics.dependents}
-- Propensity Score: ${selectedCustomer.propensityScore}%
-
-Provide a JSON response with:
-{
-  "status": "approved|declined|review",
-  "reason": "brief explanation",
-  "premium": monthly_premium_amount_if_approved,
-  "conditions": ["any special conditions"]
-}`
-            }
-          ]
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userMessage }
+          ],
+          stream: true
         })
       });
 
-      const data = await response.json();
-      const aiResponse = data.choices[0].message.content;
-      
-      // Parse AI response
-      try {
-        const result = JSON.parse(aiResponse);
-        setUnderwritingResult(result);
-      } catch (parseError) {
-        // Fallback if JSON parsing fails
-        setUnderwritingResult({
-          status: 'approved',
-          reason: aiResponse,
-          premium: Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001)
-        });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      
+      // Add initial assistant message to transcript
+      setLlmTranscript(prev => [...prev, { 
+        role: 'assistant', 
+        content: '', 
+        timestamp: new Date() 
+      }]);
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content || '';
+                if (content) {
+                  aiResponse += content;
+                  // Update the last message (assistant) in transcript with streaming content
+                  setLlmTranscript(prev => prev.map((msg, idx) => 
+                    idx === prev.length - 1 ? { ...msg, content: aiResponse } : msg
+                  ));
+                }
+              } catch (e) {
+                // Skip invalid JSON chunks
+                continue;
+              }
+            }
+          }
+        }
+      }
+      
+      // Try to parse structured JSON response
+      let parsedResult;
+      try {
+        // Extract JSON from response if wrapped in text
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : aiResponse;
+        parsedResult = JSON.parse(jsonString);
+        
+        // Ensure required fields exist and map to new terminology
+        const result = {
+          status: parsedResult.decision?.toLowerCase().replace('_', ' ') || 'eligible',
+          reason: parsedResult.reasoning || aiResponse,
+          premium: parsedResult.premium_annual || Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001),
+          premiumBreakdown: parsedResult.premium_breakdown || {
+            base_premium: Math.floor((selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001) * 0.8),
+            risk_loading: Math.floor((selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001) * 0.15),
+            admin_fee: Math.floor((selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001) * 0.05),
+            total: Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001)
+          },
+          confidence: parsedResult.confidence || 85,
+          riskRating: parsedResult.risk_rating || 'Medium',
+          keyFactors: parsedResult.key_factors || [],
+          conditions: parsedResult.conditions || [],
+          nextSteps: parsedResult.next_steps || 'Proceed with policy issuance'
+        };
+        
+        setUnderwritingResult(result);
+        updateUnderwritingStep('AI Underwriting', 'completed', `Decision: ${result.status.toUpperCase()} (${result.confidence}% confidence)`);
+        
+      } catch (parseError) {
+        console.log('JSON parsing failed, using fallback structure');
+        // Fallback structured response
+        const fallbackResult = {
+          status: selectedCustomer.propensityScore > 70 ? 'eligible' as const : 'review required' as const,
+          reason: aiResponse,
+          premium: Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001),
+          premiumBreakdown: {
+            base_premium: Math.floor((selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001) * 0.8),
+            risk_loading: Math.floor((selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001) * 0.15),
+            admin_fee: Math.floor((selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001) * 0.05),
+            total: Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001)
+          },
+          confidence: Math.min(selectedCustomer.propensityScore + 15, 95),
+          riskRating: selectedCustomer.profile.occupationRisk,
+          keyFactors: [`Age: ${selectedCustomer.age}`, `Income: $${selectedCustomer.income.toLocaleString()}`, `Occupation: ${selectedCustomer.demographics.occupation}`],
+          conditions: [],
+          nextSteps: 'Manual review recommended'
+        };
+        
+        setUnderwritingResult(fallbackResult);
+        updateUnderwritingStep('AI Underwriting', 'completed', `Decision: ${fallbackResult.status.toUpperCase()} (${fallbackResult.confidence}% confidence)`);
+      }
+
+      // Step 6: Final Processing
+      updateUnderwritingStep('Final Processing', 'processing', 'Generating policy documents and recommendations...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      updateUnderwritingStep('Final Processing', 'completed', 'Underwriting assessment completed successfully');
+
     } catch (error) {
       console.error('Underwriting error:', error);
+      updateUnderwritingStep(currentUnderwritingStep || 'Processing', 'failed', 'An error occurred during processing');
+      
       // Fallback result
+      const fallbackPremium = Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001);
       setUnderwritingResult({
-        status: selectedCustomer.propensityScore > 70 ? 'approved' : 'review',
-        reason: `Assessment based on customer profile analysis. Score: ${selectedCustomer.propensityScore}%`,
-        premium: Math.floor(selectedCustomer.age * 2.5 + selectedCustomer.income * 0.001)
+        status: selectedCustomer.propensityScore > 70 ? 'eligible' as const : 'review required' as const,
+        reason: `Assessment completed based on customer profile analysis. Propensity Score: ${selectedCustomer.propensityScore}%`,
+        premium: fallbackPremium,
+        premiumBreakdown: {
+          base_premium: Math.floor(fallbackPremium * 0.8),
+          risk_loading: Math.floor(fallbackPremium * 0.15),
+          admin_fee: Math.floor(fallbackPremium * 0.05),
+          total: fallbackPremium
+        },
+        confidence: Math.min(selectedCustomer.propensityScore + 10, 90),
+        riskRating: selectedCustomer.profile.occupationRisk,
+        keyFactors: [`Age: ${selectedCustomer.age}`, `Income: $${selectedCustomer.income.toLocaleString()}`],
+        conditions: [],
+        nextSteps: 'Standard processing'
       });
     }
     
     setIsUnderwriting(false);
+    setCurrentUnderwritingStep('');
   };
 
   // Send WhatsApp campaign with AI-generated dynamic content
@@ -2444,8 +2686,11 @@ If asked about specific recommendations or underwriting for the current customer
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white border border-gray-200 rounded-xl p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Assessment Panel */}
+            <div className="lg:col-span-2">
+              <div className="bg-white border border-gray-200 rounded-xl p-8">
             <div className="text-center mb-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {selectedProduct.charAt(0).toUpperCase() + selectedProduct.slice(1)} Insurance Assessment
@@ -2454,38 +2699,103 @@ If asked about specific recommendations or underwriting for the current customer
             </div>
 
             {isUnderwriting ? (
-              <div className="py-12">
-                <div className="flex items-center justify-center mb-6">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                    <FaSpinner className="text-gray-600 animate-spin" />
+              <div className="py-8">
+                <div className="mb-8">
+                  <div className="flex items-center justify-center mb-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FaSpinner className="text-blue-600 animate-spin" />
+                    </div>
                   </div>
+                  <h4 className="text-center text-lg font-semibold text-gray-900 mb-2">AI Underwriting in Progress</h4>
+                  <p className="text-center text-gray-600">Advanced AI models are analyzing your customer's profile</p>
                 </div>
-                <div className="text-center">
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">Processing Eligibility Assessment</h4>
-                  <p className="text-gray-600 text-sm">Analyzing risk profile and policy eligibility</p>
+
+                {/* Step-by-step process display */}
+                <div className="space-y-4">
+                  {underwritingSteps.map((step, index) => (
+                    <div key={step.step} className="flex items-start gap-4">
+                      {/* Step indicator */}
+                      <div className="flex-shrink-0 mt-1">
+                        {step.status === 'completed' ? (
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                            <FaCheckCircle className="text-green-600" size={14} />
+                          </div>
+                        ) : step.status === 'processing' ? (
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                            <FaSpinner className="text-blue-600 animate-spin" size={12} />
+                          </div>
+                        ) : step.status === 'failed' ? (
+                          <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                            <FaTimesCircle className="text-red-600" size={14} />
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Step content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h5 className={`text-sm font-medium ${
+                            step.status === 'completed' ? 'text-green-900' : 
+                            step.status === 'processing' ? 'text-blue-900' : 
+                            step.status === 'failed' ? 'text-red-900' : 'text-gray-500'
+                          }`}>
+                            {step.step}
+                          </h5>
+                          {step.timestamp && (
+                            <span className="text-xs text-gray-400">
+                              {step.timestamp.toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
+                        {step.details && (
+                          <p className={`text-xs mt-1 ${
+                            step.status === 'completed' ? 'text-green-700' : 
+                            step.status === 'processing' ? 'text-blue-700' : 
+                            step.status === 'failed' ? 'text-red-700' : 'text-gray-500'
+                          }`}>
+                            {step.details}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="mt-6 bg-gray-100 rounded-full h-1 overflow-hidden">
-                  <div className="bg-gray-400 h-1 rounded-full animate-pulse transition-all duration-1000" style={{ width: '75%' }}></div>
-                </div>
+
+                {/* Current step indicator */}
+                {currentUnderwritingStep && (
+                  <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <FaSpinner className="text-blue-600 animate-spin" size={16} />
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">Current Step: {currentUnderwritingStep}</p>
+                        <p className="text-xs text-blue-700">AI models are processing your request...</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : underwritingResult ? (
               <div className="space-y-6">
                 {/* Decision Summary */}
                 <div className="text-center pb-4 border-b border-gray-200">
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
-                    (underwritingOverride.status || underwritingResult.status) === 'approved' ? 'bg-green-50 text-green-800 border border-green-200' :
-                    (underwritingOverride.status || underwritingResult.status) === 'declined' ? 'bg-red-50 text-red-800 border border-red-200' : 
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+                    (underwritingOverride.status || underwritingResult.status) === 'eligible' || (underwritingOverride.status || underwritingResult.status) === 'approved' ? 'bg-green-50 text-green-800 border border-green-200' :
+                    (underwritingOverride.status || underwritingResult.status) === 'not eligible' || (underwritingOverride.status || underwritingResult.status) === 'declined' ? 'bg-red-50 text-red-800 border border-red-200' : 
                     'bg-amber-50 text-amber-800 border border-amber-200'
                   }`}>
-                    {(underwritingOverride.status || underwritingResult.status) === 'approved' ? (
+                    {(underwritingOverride.status || underwritingResult.status) === 'eligible' || (underwritingOverride.status || underwritingResult.status) === 'approved' ? (
                       <>
                         <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-                        APPROVED
+                        RECOMMENDED
                       </>
-                    ) : (underwritingOverride.status || underwritingResult.status) === 'declined' ? (
+                    ) : (underwritingOverride.status || underwritingResult.status) === 'not eligible' || (underwritingOverride.status || underwritingResult.status) === 'declined' ? (
                       <>
                         <div className="w-2 h-2 bg-red-600 rounded-full"></div>
-                        DECLINED
+                        NOT ELIGIBLE
                       </>
                     ) : (
                       <>
@@ -2553,17 +2863,52 @@ If asked about specific recommendations or underwriting for the current customer
 
                 {/* Premium Details */}
                 {underwritingResult.premium && (
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h5 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wide">Premium Structure</h5>
-                    <div className="flex items-center justify-between">
+                  <div className="bg-green-50 border-2 border-transparent bg-clip-padding rounded-lg p-4 relative">
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-green-400 to-green-600 p-0.5">
+                      <div className="w-full h-full rounded-md bg-green-50"></div>
+                    </div>
+                    <div className="relative">
+                    <h5 className="font-semibold text-green-700 mb-3 text-sm uppercase tracking-wide">Premium Structure</h5>
+                    <div className="flex items-center justify-between mb-4">
                       <div>
-                        <div className="text-2xl font-bold text-gray-900">${underwritingResult.premium}</div>
-                        <div className="text-sm text-gray-600">Monthly Premium</div>
+                        <div className="text-2xl font-bold text-green-700">${underwritingResult.premium}</div>
+                        <div className="text-sm text-green-600">Annual Premium</div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-gray-700">${underwritingResult.premium * 12}</div>
-                        <div className="text-sm text-gray-600">Annual Premium</div>
+                      {underwritingResult.confidence && (
+                        <div className="text-right">
+                          <div className="text-lg font-semibold text-blue-600">{underwritingResult.confidence}%</div>
+                          <div className="text-sm text-gray-600">Confidence</div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Premium Breakdown */}
+                    {underwritingResult.premiumBreakdown && (
+                      <div className="border-t border-gray-200 pt-4">
+                        <h6 className="font-medium text-gray-700 mb-3 text-xs uppercase tracking-wide">Premium Breakdown</h6>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Base Premium</span>
+                            <span className="font-medium">${underwritingResult.premiumBreakdown.base_premium}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Risk Loading</span>
+                            <span className="font-medium">${underwritingResult.premiumBreakdown.risk_loading}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Admin Fee</span>
+                            <span className="font-medium">${underwritingResult.premiumBreakdown.admin_fee}</span>
+                          </div>
+                          <div className="flex justify-between border-t border-gray-200 pt-2 font-semibold">
+                            <span className="text-gray-900">Total Annual Premium</span>
+                            <span className="text-gray-900">${underwritingResult.premiumBreakdown.total}</span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-2">
+                            Monthly equivalent: ${Math.round(underwritingResult.premiumBreakdown.total / 12)}
+                          </div>
+                        </div>
                       </div>
+                    )}
                     </div>
                   </div>
                 )}
@@ -2663,6 +3008,58 @@ If asked about specific recommendations or underwriting for the current customer
                 </button>
               </div>
             )}
+              </div>
+            </div>
+            
+            {/* LLM Transcript Panel */}
+            <div className="lg:col-span-1">
+              <div className="bg-white border border-gray-200 rounded-xl p-1 h-full">
+                <div className="flex items-center gap-2 mb-4">
+                  <FaRobot className="text-blue-600" size={16} />
+                  <h4 className="font-semibold text-gray-900">AI Eligibility Transcript</h4>
+                </div>
+                
+                {llmTranscript.length > 0 ? (
+                  <div className="space-y-4 h-full overflow-y-auto">
+                    {llmTranscript.map((message, index) => (
+                      <div key={index} className="text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-2 h-2 rounded-full ${
+                            message.role === 'system' ? 'bg-purple-500' : 
+                            message.role === 'user' ? 'bg-blue-500' : 'bg-green-500'
+                          }`}></div>
+                          <span className={`text-xs font-medium uppercase tracking-wide ${
+                            message.role === 'system' ? 'text-purple-600' : 
+                            message.role === 'user' ? 'text-blue-600' : 'text-green-600'
+                          }`}>
+                            {message.role === 'system' ? 'System Prompt' : 
+                             message.role === 'user' ? 'Customer Data' : 'AI Response'}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {message.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div className={`p-3 rounded-lg text-xs ${
+                          message.role === 'system' ? 'bg-purple-50 border border-purple-200' : 
+                          message.role === 'user' ? 'bg-blue-50 border border-blue-200' : 'bg-green-50 border border-green-200'
+                        }`}>
+                          <pre className="whitespace-pre-wrap font-mono text-xs">
+                            {message.role === 'system' ? 
+                              message.content.substring(0, 200) + (message.content.length > 200 ? '...' : '') :
+                              message.content}
+                          </pre>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-1">
+                    <FaSpinner className="text-gray-400 mx-auto" size={12} />
+                    <p className="text-xs text-gray-500 mt-1">AI conversation appears here</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

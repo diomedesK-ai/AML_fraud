@@ -137,3 +137,6 @@ The wealth advisor buttons now function as **instant analysis tools** that provi
 
 ## 🔄 **Fallback Behavior**
 If the immediate analysis fails, the system falls back to the original prompt-setting behavior, ensuring the interface remains functional.
+
+
+

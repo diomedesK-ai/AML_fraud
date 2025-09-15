@@ -131,3 +131,4 @@ Agents can now get complete, up-to-date information from both internal company r
 - Enhanced realtime event handling for function calls
 - Proper error handling and fallbacks
 - Real-time streaming results for immediate feedback
+

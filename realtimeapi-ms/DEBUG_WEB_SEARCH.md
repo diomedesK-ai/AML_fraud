@@ -87,3 +87,4 @@ If web search still doesn't work after these changes, the issue might be:
 - AI model not recognizing the search triggers
 
 Try the explicit search phrases above and check browser console for error messages.
+
