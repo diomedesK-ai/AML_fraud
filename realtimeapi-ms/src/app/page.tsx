@@ -179,7 +179,7 @@ function HomeContent() {
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedNav, setSelectedNav] = useState(0);
+  const [selectedNav, setSelectedNav] = useState(3);
   const [selectedTab, setSelectedTab] = useState(0);
   const [selectedConversation, setSelectedConversation] = useState('1');
   const [searchQuery, setSearchQuery] = useState('');
@@ -195,7 +195,7 @@ function HomeContent() {
   // URL routing for navigation
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'aml' | 'datasharing' | 'knowledge' | 'settings'>('wealth');
+  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'aml' | 'datasharing' | 'knowledge' | 'settings'>('aml');
 
   // Handle URL-based navigation
   useEffect(() => {
@@ -219,8 +219,8 @@ function HomeContent() {
       setCurrentView('settings');
       setSelectedNav(7); // Settings nav item
     } else {
-      setCurrentView('wealth');
-      setSelectedNav(0); // Wealth Management nav item
+      setCurrentView('aml');
+      setSelectedNav(3); // AML Detection nav item
     }
   }, [searchParams]);
 
