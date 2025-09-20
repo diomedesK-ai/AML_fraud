@@ -32,6 +32,7 @@ import ExperienceSelector from '@/components/ExperienceSelector';
 import WealthAdvisorInterface from '@/components/WealthAdvisorInterface';
 import BancassuranceInterface from '@/components/BancassuranceInterface';
 import ExternalDataSharingInterface from '@/components/ExternalDataSharingInterface';
+import AMLInterface from '@/components/AMLInterface';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { getWealthAdvisorPrompt } from '@/utils/wealthAdvisorScenarios';
 
@@ -56,7 +57,8 @@ const NAV_ITEMS = [
   { icon: <FaRegComments size={20} />, label: 'Wealth Management', key: 'wealth', active: true },
   { icon: <FaPhone size={20} />, label: 'Contact Center', key: 'contact', active: false },
   { icon: <FaUniversity size={20} />, label: 'Bancassurance', key: 'bancassurance', active: false },
-  { icon: <FaShieldAlt size={20} />, label: 'Data Sharing', key: 'datasharing', active: false },
+  { icon: <FaShieldAlt size={20} />, label: 'AML Detection', key: 'aml', active: false },
+  { icon: <FaGlobe size={20} />, label: 'Data Sharing', key: 'datasharing', active: false },
   { icon: <FaBell size={20} />, label: 'Alerts & Notifications', key: 'alerts', active: false },
   { icon: <FaArchive size={20} />, label: 'Knowledge Base', key: 'knowledge', active: false },
   { icon: <FaCog size={20} />, label: 'Global Settings', key: 'settings', active: false },
@@ -193,7 +195,7 @@ function HomeContent() {
   // URL routing for navigation
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'datasharing' | 'knowledge' | 'settings'>('wealth');
+  const [currentView, setCurrentView] = useState<'wealth' | 'contact' | 'bancassurance' | 'aml' | 'datasharing' | 'knowledge' | 'settings'>('wealth');
 
   // Handle URL-based navigation
   useEffect(() => {
@@ -204,15 +206,18 @@ function HomeContent() {
     } else if (view === 'bancassurance') {
       setCurrentView('bancassurance');
       setSelectedNav(2); // Bancassurance nav item
+    } else if (view === 'aml') {
+      setCurrentView('aml');
+      setSelectedNav(3); // AML Detection nav item
     } else if (view === 'datasharing') {
       setCurrentView('datasharing');
-      setSelectedNav(3); // Data Sharing nav item
+      setSelectedNav(4); // Data Sharing nav item
     } else if (view === 'knowledge') {
       setCurrentView('knowledge');
-      setSelectedNav(5); // Knowledge Base nav item
+      setSelectedNav(6); // Knowledge Base nav item
     } else if (view === 'settings') {
       setCurrentView('settings');
-      setSelectedNav(6); // Settings nav item
+      setSelectedNav(7); // Settings nav item
     } else {
       setCurrentView('wealth');
       setSelectedNav(0); // Wealth Management nav item
@@ -231,6 +236,9 @@ function HomeContent() {
     } else if (key === 'bancassurance') {
       setCurrentView('bancassurance');
       router.push('/?view=bancassurance');
+    } else if (key === 'aml') {
+      setCurrentView('aml');
+      router.push('/?view=aml');
     } else if (key === 'datasharing') {
       setCurrentView('datasharing');
       router.push('/?view=datasharing');
@@ -265,11 +273,11 @@ function HomeContent() {
   ]);
   const [currentWallpaperIndex, setCurrentWallpaperIndex] = useState(0);
 
-  // Experience selector states
+  // Experience selector states (only for wealth management)
   const [selectedExperience, setSelectedExperience] = useState<string>('wealth');
   const [showWealthAdvisor, setShowWealthAdvisor] = useState(true);
 
-  // Handle experience selection
+  // Handle experience selection (only for wealth management)
   const handleExperienceSelect = (experience: string) => {
     setSelectedExperience(experience);
     if (experience === 'wealth') {
@@ -2258,8 +2266,8 @@ ${customPrompt}`,
           </div>
         </aside>
 
-        {/* Column 2: Messages Section - Hidden in Bancassurance and Data Sharing views */}
-        {currentView !== 'bancassurance' && currentView !== 'datasharing' && (
+        {/* Column 2: Messages Section - Hidden in Bancassurance, Data Sharing and AML views */}
+        {currentView !== 'bancassurance' && currentView !== 'datasharing' && currentView !== 'aml' && (
           <div className="w-96 bg-white border-r border-blue-200 flex flex-col shadow-lg">
           {/* Messages Header */}
           <div className="p-6 border-b border-blue-100">
@@ -2359,6 +2367,11 @@ ${customPrompt}`,
           ) : currentView === 'bancassurance' ? (
             /* Bancassurance Interface */
             <BancassuranceInterface />
+      ) : currentView === 'aml' ? (
+        /* AML Interface - Full Width without Messages */
+        <div className="flex-1 overflow-y-auto">
+          <AMLInterface />
+        </div>
           ) : currentView === 'datasharing' ? (
             /* External Data Sharing Interface */
             <ExternalDataSharingInterface />
@@ -2722,16 +2735,18 @@ ${customPrompt}`,
                 </div>
               </div>
 
-              {/* Experience Selector */}
-              <div className="px-6 py-2 border-b border-gray-100 bg-gray-50">
-                <ExperienceSelector 
-                  selected={selectedExperience} 
-                  onSelect={handleExperienceSelect} 
-                />
-              </div>
+              {/* Experience Selector - only show for wealth management */}
+              {currentView === 'wealth' && (
+                <div className="px-6 py-2 border-b border-gray-100 bg-gray-50">
+                  <ExperienceSelector 
+                    selected={selectedExperience} 
+                    onSelect={handleExperienceSelect} 
+                  />
+                </div>
+              )}
 
               {/* Wealth Advisor Interface */}
-              {showWealthAdvisor && (
+              {currentView === 'wealth' && showWealthAdvisor && (
                 <div className="px-6 py-4 border-b border-gray-100">
                   <WealthAdvisorInterface 
                     onScenarioSelect={handleWealthScenarioSelect}

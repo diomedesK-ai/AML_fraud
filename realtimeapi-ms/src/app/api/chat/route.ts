@@ -4,12 +4,28 @@ export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, stream = false } = await req.json();
+    const body = await req.json();
+    console.log('Received request body:', JSON.stringify(body, null, 2));
+    
+    const { messages, stream = false } = body;
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return new Response('Missing OpenAI API key', { status: 500 });
     }
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.error('Invalid messages parameter:', messages);
+      return new Response('Missing or invalid messages parameter', { status: 400 });
+    }
+
+    console.log('Sending to OpenAI:', {
+      model: 'gpt-4o',
+      messages: messages,
+      stream: stream,
+      max_tokens: 4000,
+      temperature: 0.7,
+    });
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
